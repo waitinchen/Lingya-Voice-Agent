@@ -1,0 +1,46 @@
+# 依賴
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 環境變數
+.env
+.env.local
+.env.*.local
+
+# 日誌
+logs/
+*.log
+
+# 作業系統
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 模型快取（Transformers.js）
+.cache/
+models/
+
+# 音頻檔案（測試用）
+*.wav
+*.mp3
+*.ogg
+
+# TTS 輸出目錄
+outputs/
+
+# 臨時文件目錄
+tmp/
+
+# 臨時檔案
+tmp/
+temp/
+*.tmp
+

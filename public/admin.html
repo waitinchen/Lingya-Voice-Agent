@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>花小軟管理後台 🌸</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft JhengHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .admin-container {
+            width: 100%;
+            max-width: 900px;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .admin-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .admin-header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .admin-header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .admin-content {
+            padding: 30px;
+        }
+
+        .login-form, .prompt-editor {
+            display: none;
+        }
+
+        .login-form.active, .prompt-editor.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 500px;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            line-height: 1.6;
+            resize: vertical;
+            transition: border-color 0.3s;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .status-message {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .status-message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            display: block;
+        }
+
+        .status-message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            display: block;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .btn-group .btn {
+            flex: 1;
+        }
+
+        .logout-btn {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <div class="admin-header">
+            <h1>🌸 花小軟管理後台</h1>
+            <p>編輯系統提示詞，調整花小軟的個性</p>
+        </div>
+        
+        <div class="admin-content">
+            <!-- 登入表單 -->
+            <div class="login-form active" id="loginForm">
+                <form id="loginFormElement">
+                    <div class="form-group">
+                        <label for="username">帳號</label>
+                        <input type="text" id="username" name="username" required autocomplete="off">
+                    </div>
+                    <div class="form-group">
+                        <label for="password">密碼</label>
+                        <input type="password" id="password" name="password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width: 100%;">登入</button>
+                </form>
+            </div>
+
+            <!-- 提示詞編輯器 -->
+            <div class="prompt-editor" id="promptEditor">
+                <div class="status-message" id="statusMessage"></div>
+                
+                <div class="form-group">
+                    <label for="systemPrompt">系統提示詞（花小軟的個性定義）</label>
+                    <textarea id="systemPrompt" placeholder="在此編輯花小軟的系統提示詞..."></textarea>
+                </div>
+                
+                <div class="btn-group">
+                    <button class="btn btn-primary" id="saveBtn">💾 儲存提示詞</button>
+                    <button class="btn btn-secondary" id="reloadBtn">🔄 重新載入</button>
+                </div>
+                
+                <button class="btn btn-secondary logout-btn" id="logoutBtn" style="width: 100%;">登出</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const loginForm = document.getElementById('loginForm');
+        const promptEditor = document.getElementById('promptEditor');
+        const loginFormElement = document.getElementById('loginFormElement');
+        const systemPrompt = document.getElementById('systemPrompt');
+        const saveBtn = document.getElementById('saveBtn');
+        const reloadBtn = document.getElementById('reloadBtn');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const statusMessage = document.getElementById('statusMessage');
+
+        // 檢查是否已登入
+        checkAuth();
+
+        // 登入表單提交
+        loginFormElement.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch('/api/admin/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password }),
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    showStatus('success', '登入成功！');
+                    setTimeout(() => {
+                        loginForm.classList.remove('active');
+                        promptEditor.classList.add('active');
+                        loadPrompt();
+                    }, 500);
+                } else {
+                    showStatus('error', data.error || '登入失敗');
+                }
+            } catch (error) {
+                showStatus('error', '登入時發生錯誤：' + error.message);
+            }
+        });
+
+        // 載入提示詞
+        async function loadPrompt() {
+            try {
+                const response = await fetch('/api/admin/get-prompt', {
+                    credentials: 'include'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    systemPrompt.value = data.prompt || '';
+                } else {
+                    showStatus('error', '載入提示詞失敗：' + data.error);
+                }
+            } catch (error) {
+                showStatus('error', '載入提示詞時發生錯誤：' + error.message);
+            }
+        }
+
+        // 儲存提示詞
+        saveBtn.addEventListener('click', async () => {
+            const prompt = systemPrompt.value.trim();
+            
+            if (!prompt) {
+                showStatus('error', '提示詞不能為空');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/admin/update-prompt', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt }),
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    showStatus('success', '✅ 提示詞已儲存！花小軟的個性已更新～');
+                } else {
+                    showStatus('error', '儲存失敗：' + data.error);
+                }
+            } catch (error) {
+                showStatus('error', '儲存時發生錯誤：' + error.message);
+            }
+        });
+
+        // 重新載入
+        reloadBtn.addEventListener('click', () => {
+            if (confirm('確定要重新載入嗎？未儲存的變更將會遺失。')) {
+                loadPrompt();
+                showStatus('success', '已重新載入');
+            }
+        });
+
+        // 登出
+        logoutBtn.addEventListener('click', async () => {
+            try {
+                await fetch('/api/admin/logout', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                
+                loginForm.classList.add('active');
+                promptEditor.classList.remove('active');
+                document.getElementById('username').value = '';
+                document.getElementById('password').value = '';
+                showStatus('success', '已登出');
+            } catch (error) {
+                console.error('登出錯誤:', error);
+            }
+        });
+
+        // 檢查認證狀態
+        async function checkAuth() {
+            try {
+                const response = await fetch('/api/admin/check-auth', {
+                    credentials: 'include'
+                });
+                const data = await response.json();
+                
+                if (data.authenticated) {
+                    loginForm.classList.remove('active');
+                    promptEditor.classList.add('active');
+                    loadPrompt();
+                }
+            } catch (error) {
+                // 未登入，顯示登入表單
+            }
+        }
+
+        // 顯示狀態訊息
+        function showStatus(type, message) {
+            statusMessage.className = `status-message ${type}`;
+            statusMessage.textContent = message;
+            setTimeout(() => {
+                statusMessage.className = 'status-message';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
+

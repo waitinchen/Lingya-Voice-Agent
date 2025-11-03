@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>花小軟 - 語音助手 🌸</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft JhengHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .chat-container {
+            width: 100%;
+            max-width: 800px;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            height: 90vh;
+            max-height: 700px;
+        }
+
+        /* 手機版響應式設計 */
+        @media (max-width: 768px) {
+            body {
+                padding: 5px;
+                align-items: flex-start;
+            }
+
+            .chat-container {
+                height: calc(100vh - 10px); /* 100vh - 上下各5px */
+                max-height: none;
+                border-radius: 15px;
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            }
+
+            .chat-header {
+                padding: 15px;
+                border-radius: 15px 15px 0 0;
+            }
+
+            .chat-header h1 {
+                font-size: 20px;
+            }
+
+            .chat-messages {
+                padding: 15px;
+            }
+
+            .chat-input {
+                padding: 15px;
+            }
+        }
+
+        /* 超小屏幕（小於 480px）*/
+        @media (max-width: 480px) {
+            body {
+                padding: 5px;
+            }
+
+            .chat-container {
+                height: calc(100vh - 10px);
+                border-radius: 10px;
+            }
+
+            .chat-header {
+                padding: 12px;
+                border-radius: 10px 10px 0 0;
+            }
+
+            .chat-header h1 {
+                font-size: 18px;
+            }
+
+            .chat-messages {
+                padding: 12px;
+                gap: 12px;
+            }
+
+            .message-content {
+                max-width: 75%;
+                padding: 10px 14px;
+                font-size: 14px;
+            }
+
+            .chat-input {
+                padding: 12px;
+            }
+        }
+
+        .chat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 20px 20px 0 0;
+            text-align: center;
+        }
+
+        .chat-header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .chat-header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .message {
+            display: flex;
+            gap: 10px;
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user {
+            flex-direction: row-reverse;
+        }
+
+        .message-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+
+        .message.user .message-avatar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .message.assistant .message-avatar {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .message-content {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            word-wrap: break-word;
+        }
+
+        .message.user .message-content {
+            background: #667eea;
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.assistant .message-content {
+            background: #f0f0f0;
+            color: #333;
+            border-bottom-left-radius: 4px;
+        }
+
+        .message-audio {
+            margin-top: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .audio-player {
+            flex: 1;
+            height: 30px;
+        }
+
+        .chat-input {
+            padding: 20px;
+            border-top: 1px solid #eee;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .input-group {
+            flex: 1;
+            display: flex;
+            gap: 10px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #eee;
+            border-radius: 25px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus {
+            border-color: #667eea;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-send {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-send:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-voice {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            position: relative;
+        }
+
+        .btn-voice:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(245, 87, 108, 0.4);
+        }
+
+        .btn-voice.recording {
+            background: #ff4444;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .status {
+            text-align: center;
+            padding: 10px;
+            color: #666;
+            font-size: 12px;
+        }
+
+        /* 声音波浪可视化 */
+        .voice-visualizer {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 300px;
+            height: 150px;
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 20px;
+            padding: 20px;
+            display: none;
+            z-index: 1000;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .voice-visualizer.active {
+            display: block;
+        }
+
+        .voice-visualizer canvas {
+            width: 100%;
+            height: 100%;
+            border-radius: 10px;
+        }
+
+        .voice-visualizer-text {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-size: 12px;
+            text-align: center;
+            width: 90%;
+        }
+
+        /* 实时转录文字显示 */
+        .realtime-transcript {
+            position: fixed;
+            bottom: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(102, 126, 234, 0.95);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 15px;
+            max-width: 600px;
+            width: 90%;
+            display: none;
+            z-index: 999;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+            font-size: 16px;
+            text-align: center;
+        }
+
+        .realtime-transcript.active {
+            display: block;
+            animation: slideUp 0.3s;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+
+        .realtime-transcript .transcript-text {
+            margin-bottom: 5px;
+        }
+
+        .realtime-transcript .transcript-hint {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h1>🌸 花小軟- 語氣之靈</h1>
+        </div>
+        
+        <div class="chat-messages" id="messages">
+            <div class="message assistant">
+                <div class="message-avatar">🌸</div>
+                <div class="message-content">
+                    你好！我是花小軟，很高興認識你！你可以打字或按住語音按鈕說話 💫
+                </div>
+            </div>
+        </div>
+        
+        <div class="chat-input">
+            <div class="input-group">
+                <input type="text" id="textInput" placeholder="輸入訊息..." />
+                <button class="btn-send" id="sendBtn">發送</button>
+            </div>
+            <button class="btn-voice" id="voiceBtn" title="按住說話">🎤</button>
+        </div>
+        
+        <div class="status" id="status"></div>
+    </div>
+
+    <!-- 声音波浪可视化 -->
+    <div class="voice-visualizer" id="voiceVisualizer">
+        <canvas id="audioCanvas"></canvas>
+        <div class="voice-visualizer-text">正在錄音... 🎤</div>
+    </div>
+
+    <!-- 实时转录显示 -->
+    <div class="realtime-transcript" id="realtimeTranscript">
+        <div class="transcript-text" id="transcriptText"></div>
+        <div class="transcript-hint">实时转录中...</div>
+    </div>
+
+    <script>
+        const messagesEl = document.getElementById('messages');
+        const textInput = document.getElementById('textInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const voiceBtn = document.getElementById('voiceBtn');
+        const statusEl = document.getElementById('status');
+        
+        let conversationHistory = []; // Step ③-B: 對話歷史記憶
+        let isRecording = false;
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let recordingStartTime = null; // 錄音開始時間
+        const MIN_RECORDING_DURATION = 500; // 最小錄音時長（毫秒）：0.5秒
+        let currentUserIdentity = null; // 歸屬記憶：用戶身份（'dad' 表示老爸，null 表示未知）
+        let currentUserName = null; // 當前用戶名稱
+        
+        // 实时音频分析
+        let audioContext = null;
+        let analyser = null;
+        let microphone = null;
+        let dataArray = null;
+        let animationFrameId = null;
+        
+        // 实时语音识别
+        let recognition = null;
+        let realtimeTranscript = '';
+        
+        // Canvas 可视化
+        const visualizerEl = document.getElementById('voiceVisualizer');
+        const canvas = document.getElementById('audioCanvas');
+        const ctx = canvas.getContext('2d');
+        const transcriptEl = document.getElementById('realtimeTranscript');
+        const transcriptTextEl = document.getElementById('transcriptText');
+        
+        // 设置 Canvas 尺寸
+        function resizeCanvas() {
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        
+        // 绘制音频波形
+        function drawWaveform() {
+            if (!analyser || !isRecording) {
+                animationFrameId = null;
+                return;
+            }
+            
+            analyser.getByteFrequencyData(dataArray);
+            
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            const barWidth = (canvas.width / dataArray.length) * 2.5;
+            let barHeight;
+            let x = 0;
+            
+            for (let i = 0; i < dataArray.length; i++) {
+                barHeight = (dataArray[i] / 255) * canvas.height;
+                
+                // 使用绿色渐变
+                const gradient = ctx.createLinearGradient(0, canvas.height - barHeight, 0, canvas.height);
+                gradient.addColorStop(0, '#4ade80'); // 绿色
+                gradient.addColorStop(0.5, '#22c55e'); // 亮绿色
+                gradient.addColorStop(1, '#16a34a'); // 深绿色
+                
+                ctx.fillStyle = gradient;
+                ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+                
+                x += barWidth + 1;
+            }
+            
+            animationFrameId = requestAnimationFrame(drawWaveform);
+        }
+        
+        // 初始化实时语音识别（Web Speech API）
+        function initSpeechRecognition() {
+            if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                recognition = new SpeechRecognition();
+                recognition.lang = 'zh-TW';
+                recognition.continuous = true;
+                recognition.interimResults = true;
+                
+                recognition.onresult = (event) => {
+                    let interimTranscript = '';
+                    let finalTranscript = '';
+                    
+                    for (let i = event.resultIndex; i < event.results.length; i++) {
+                        const transcript = event.results[i][0].transcript;
+                        if (event.results[i].isFinal) {
+                            finalTranscript += transcript;
+                        } else {
+                            interimTranscript += transcript;
+                        }
+                    }
+                    
+                    // 更新实时转录显示
+                    realtimeTranscript = finalTranscript || interimTranscript;
+                    if (realtimeTranscript) {
+                        transcriptTextEl.textContent = realtimeTranscript;
+                        transcriptEl.classList.add('active');
+                    }
+                };
+                
+                recognition.onerror = (event) => {
+                    console.error('语音识别错误:', event.error);
+                };
+                
+                recognition.onend = () => {
+                    if (isRecording) {
+                        // 如果还在录音，重新启动
+                        try {
+                            recognition.start();
+                        } catch (e) {
+                            console.log('语音识别已停止');
+                        }
+                    }
+                };
+            } else {
+                console.warn('浏览器不支持 Web Speech API');
+            }
+        }
+
+        // 發送文字訊息
+        async function sendTextMessage() {
+            const text = textInput.value.trim();
+            if (!text) return;
+
+            addMessage('user', text);
+            textInput.value = '';
+            setStatus('正在思考...');
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        text,
+                        history: conversationHistory, // Step ③-B: 傳遞對話歷史
+                        userIdentity: currentUserIdentity, // 歸屬記憶：傳遞身份
+                        userName: currentUserName, // 傳遞用戶名稱
+                    }),
+                });
+                
+                // 檢測是否提到「老爸」關鍵詞，更新背景
+                if (text.includes('老爸') || text.includes('陈威廷') || text.includes('陳威廷')) {
+                    document.body.style.background = 'linear-gradient(135deg, #ff9a9e 0%, #fecfef 50%, #fecfef 100%)';
+                    currentUserIdentity = 'dad';
+                    console.log('💖 檢測到老爸，切換為親暱模式');
+                }
+
+                const data = await response.json();
+                const messageElement = addMessage('assistant', data.reply);
+                
+                // 更新對話歷史
+                if (data.history) {
+                    conversationHistory = data.history;
+                }
+                
+                // 生成並播放語音（帶情緒控制），並添加到消息中
+                if (data.reply) {
+                    playTextAsSpeech(data.reply, data.emotion, messageElement);
+                }
+            } catch (error) {
+                addMessage('assistant', '抱歉，我遇到了一些問題 😅');
+                console.error('Error:', error);
+            } finally {
+                setStatus('');
+            }
+        }
+
+        // 發送語音訊息
+        async function sendVoiceMessage(audioBlob, fileExtension = 'webm') {
+            setStatus('正在處理語音...');
+            console.log(`📤 發送語音訊息，大小: ${(audioBlob.size / 1024).toFixed(2)} KB`);
+
+            try {
+                const formData = new FormData();
+                // 使用正確的文件擴展名
+                formData.append('audio', audioBlob, `recording.${fileExtension}`);
+                formData.append('language', 'zh');
+                formData.append('history', JSON.stringify(conversationHistory));
+                if (currentUserIdentity) {
+                    formData.append('userIdentity', currentUserIdentity);
+                }
+                if (currentUserName) {
+                    formData.append('userName', currentUserName);
+                }
+
+                console.log('📡 發送請求到 /api/voice-chat...');
+                const response = await fetch('/api/voice-chat', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                console.log(`📥 收到回應，狀態碼: ${response.status}`);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('❌ 服務器錯誤:', errorText);
+                    throw new Error(`服務器錯誤: ${response.status} - ${errorText}`);
+                }
+
+                const data = await response.json();
+                console.log('📦 回應數據:', data);
+                
+                if (data.success) {
+                    // 顯示用戶說的話
+                    addMessage('user', data.transcribedText, true);
+                    
+                    // 顯示花小軟回應
+                    addMessage('assistant', data.text, true, data.audio);
+                    
+                    // 更新對話歷史（Step ③-B: 保持記憶）
+                    conversationHistory = data.history || [];
+                    
+                    // 可選：顯示檢測到的情緒
+                    if (data.emotion && data.emotion !== '平靜') {
+                        console.log(`檢測到情緒: ${data.emotion}`);
+                    }
+                    
+                    // 檢測回應中是否提到「想回家找老爸」，表示是陌生人模式
+                    if (data.text && (data.text.includes('想回家') || data.text.includes('老爸不在') || data.text.includes('回家找老爸'))) {
+                        document.body.style.background = 'linear-gradient(135deg, #e0e0e0 0%, #f5f5f5 100%)';
+                        if (!currentUserIdentity || currentUserIdentity !== 'dad') {
+                            currentUserIdentity = 'other';
+                            console.log('🌎 檢測到陌生人模式，花小軟想回家找老爸');
+                        }
+                    }
+                } else {
+                    console.error('❌ 語音處理失敗:', data.error || '未知錯誤');
+                    addMessage('assistant', `抱歉，我沒聽清楚，可以再說一次嗎？😅 (錯誤: ${data.error || '未知'})`);
+                }
+            } catch (error) {
+                console.error('❌ 語音處理錯誤:', error);
+                addMessage('assistant', `語音處理遇到問題，請稍後再試 😅 (${error.message})`);
+            } finally {
+                setStatus('');
+            }
+        }
+
+        // 添加訊息到聊天
+        function addMessage(role, text, isVoice = false, audioBase64 = null) {
+            const messageEl = document.createElement('div');
+            messageEl.className = `message ${role}`;
+            
+            const avatar = role === 'user' ? '👤' : '🌸';
+            
+            let audioHtml = '';
+            if (isVoice && audioBase64) {
+                audioHtml = `
+                    <div class="message-audio">
+                        <audio class="audio-player" controls>
+                            <source src="data:audio/wav;base64,${audioBase64}" type="audio/wav">
+                        </audio>
+                    </div>
+                `;
+            }
+            
+            messageEl.innerHTML = `
+                <div class="message-avatar">${avatar}</div>
+                <div class="message-content">
+                    ${text}
+                    ${audioHtml}
+                </div>
+            `;
+            
+            messagesEl.appendChild(messageEl);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+            
+            // 返回消息元素，方便後續添加音頻播放器
+            return messageEl;
+        }
+
+        // 播放文字為語音（支持情緒控制），並添加到消息中
+        async function playTextAsSpeech(text, emotion = null, messageElement = null) {
+            try {
+                const response = await fetch('/api/speak-stream', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        text,
+                        emotion, // Step ③-B: 傳遞情緒讓語音表達相應語氣
+                    }),
+                });
+
+                if (response.ok) {
+                    const audioBlob = await response.blob();
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    
+                    // 如果提供了消息元素，添加音頻播放器
+                    if (messageElement) {
+                        addAudioPlayerToMessage(messageElement, audioUrl);
+                    }
+                    
+                    // 自動播放
+                    const audio = new Audio(audioUrl);
+                    audio.play();
+                }
+            } catch (error) {
+                console.error('TTS Error:', error);
+            }
+        }
+        
+        // 添加音頻播放器到消息中
+        function addAudioPlayerToMessage(messageElement, audioUrl) {
+            // 檢查是否已經有音頻播放器
+            const existingAudio = messageElement.querySelector('.message-audio');
+            if (existingAudio) {
+                // 更新現有播放器的源
+                const audio = existingAudio.querySelector('audio');
+                if (audio) {
+                    audio.src = audioUrl;
+                }
+                return;
+            }
+            
+            // 創建新的音頻播放器
+            const messageContent = messageElement.querySelector('.message-content');
+            if (messageContent) {
+                const audioHtml = `
+                    <div class="message-audio">
+                        <audio class="audio-player" controls>
+                            <source src="${audioUrl}" type="audio/wav">
+                        </audio>
+                    </div>
+                `;
+                messageContent.insertAdjacentHTML('beforeend', audioHtml);
+            }
+        }
+
+        // 開始錄音（帶實時可視化和語音識別）
+        async function startRecording() {
+            try {
+                console.log('🎤 開始錄音...');
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                // 初始化 Web Audio API（用於可視化）
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                microphone = audioContext.createMediaStreamSource(stream);
+                microphone.connect(analyser);
+                
+                analyser.fftSize = 256;
+                const bufferLength = analyser.frequencyBinCount;
+                dataArray = new Uint8Array(bufferLength);
+                
+                // 顯示可視化
+                visualizerEl.classList.add('active');
+                drawWaveform();
+                
+                // 啟動實時語音識別
+                if (recognition) {
+                    try {
+                        recognition.start();
+                        console.log('🎙️ 實時語音識別已啟動');
+                    } catch (e) {
+                        console.log('語音識別可能已經啟動');
+                    }
+                }
+                
+                // 檢測支持的 MIME 類型
+                let mimeType = 'audio/webm';
+                if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+                    mimeType = 'audio/webm;codecs=opus';
+                } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+                    mimeType = 'audio/webm';
+                } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+                    mimeType = 'audio/mp4';
+                }
+                
+                console.log(`📝 使用音頻格式: ${mimeType}`);
+                
+                mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: mimeType
+                });
+                
+                audioChunks = [];
+                realtimeTranscript = ''; // 重置轉錄文字
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                        console.log(`📦 錄音數據塊: ${event.data.size} bytes`);
+                    }
+                };
+                
+                mediaRecorder.onstop = async () => {
+                    const recordingDuration = recordingStartTime ? Date.now() - recordingStartTime : 0;
+                    console.log(`✅ 錄音完成，共 ${audioChunks.length} 個數據塊，時長: ${(recordingDuration / 1000).toFixed(2)} 秒`);
+                    
+                    // 停止可視化
+                    visualizerEl.classList.remove('active');
+                    transcriptEl.classList.remove('active');
+                    
+                    // 停止語音識別
+                    if (recognition) {
+                        recognition.stop();
+                    }
+                    
+                    // 停止音頻分析
+                    if (microphone) {
+                        microphone.disconnect();
+                    }
+                    if (audioContext && audioContext.state !== 'closed') {
+                        audioContext.close();
+                    }
+                    
+                    // 檢查錄音時長
+                    if (recordingDuration < MIN_RECORDING_DURATION) {
+                        console.warn(`⚠️ 錄音時長太短: ${(recordingDuration / 1000).toFixed(2)} 秒，最小要求: ${(MIN_RECORDING_DURATION / 1000).toFixed(1)} 秒`);
+                        setStatus(`錄音太短，請至少錄製 ${(MIN_RECORDING_DURATION / 1000).toFixed(1)} 秒（目前 ${(recordingDuration / 1000).toFixed(1)} 秒）`);
+                        stream.getTracks().forEach(track => track.stop());
+                        isRecording = false;
+                        voiceBtn.classList.remove('recording');
+                        recordingStartTime = null;
+                        
+                        // 清理可視化和轉錄
+                        if (visualizerEl) visualizerEl.classList.remove('active');
+                        if (transcriptEl) transcriptEl.classList.remove('active');
+                        return;
+                    }
+                    
+                    const audioBlob = new Blob(audioChunks, { type: mimeType });
+                    console.log(`📊 音頻 Blob 大小: ${(audioBlob.size / 1024).toFixed(2)} KB`);
+                    
+                    // 檢查音頻文件大小（至少 2KB，確保有實際內容）
+                    if (audioBlob.size < 2048) {
+                        console.warn(`⚠️ 音頻文件太小: ${audioBlob.size} bytes，可能是空錄音或格式問題`);
+                        setStatus(`錄音內容太短或無效（${(audioBlob.size / 1024).toFixed(2)} KB），請重新錄製至少 0.5 秒`);
+                        stream.getTracks().forEach(track => track.stop());
+                        isRecording = false;
+                        voiceBtn.classList.remove('recording');
+                        recordingStartTime = null;
+                        
+                        // 清理可視化和轉錄
+                        if (visualizerEl) visualizerEl.classList.remove('active');
+                        if (transcriptEl) transcriptEl.classList.remove('active');
+                        return;
+                    }
+                    
+                    // 驗證音頻格式是否有效
+                    if (!audioBlob.type || audioBlob.type === 'application/octet-stream') {
+                        console.warn(`⚠️ 音頻格式未識別: ${audioBlob.type}`);
+                        // 根據 mimeType 設置正確的 type
+                        audioBlob.type = mimeType;
+                    }
+                    
+                    // 確定文件擴展名（優先使用 Whisper 支持的格式）
+                    // Whisper API 支持：flac, m4a, mp3, mp4, mpeg, mpga, oga, ogg, wav, webm
+                    let fileExtension = 'webm';
+                    if (mimeType.includes('mp4')) {
+                        fileExtension = 'mp4';
+                    } else if (mimeType.includes('webm')) {
+                        fileExtension = 'webm';
+                    } else if (mimeType.includes('ogg')) {
+                        fileExtension = 'ogg';
+                    }
+                    // 注意：如果瀏覽器不支持 webm，可能需要轉換為 wav
+                    // 但目前先使用瀏覽器原生格式
+                    
+                    console.log(`📦 音頻格式: ${mimeType}, 擴展名: ${fileExtension}`);
+                    
+                    // 如果有實時轉錄的文字，使用它；否則發送音頻
+                    if (realtimeTranscript.trim()) {
+                        console.log(`📝 使用實時轉錄: "${realtimeTranscript}"`);
+                        // 直接使用轉錄的文字發送
+                        await sendTextAsVoice(realtimeTranscript);
+                    } else {
+                        await sendVoiceMessage(audioBlob, fileExtension);
+                    }
+                    
+                    stream.getTracks().forEach(track => track.stop());
+                    recordingStartTime = null;
+                };
+                
+                mediaRecorder.onerror = (event) => {
+                    console.error('❌ MediaRecorder 錯誤:', event.error);
+                    setStatus('錄音發生錯誤');
+                };
+                
+                mediaRecorder.start();
+                isRecording = true;
+                recordingStartTime = Date.now(); // 記錄開始時間
+                voiceBtn.classList.add('recording');
+                setStatus('正在錄音...');
+                console.log('🎙️ 錄音中...');
+            } catch (error) {
+                console.error('❌ 錄音錯誤:', error);
+                if (error.name === 'NotAllowedError') {
+                    setStatus('無法訪問麥克風：請允許瀏覽器訪問麥克風權限');
+                } else if (error.name === 'NotFoundError') {
+                    setStatus('找不到麥克風設備');
+                } else {
+                    setStatus('無法訪問麥克風：' + error.message);
+                }
+                
+                // 清理資源
+                if (visualizerEl) visualizerEl.classList.remove('active');
+                if (transcriptEl) transcriptEl.classList.remove('active');
+                if (recognition) recognition.stop();
+                recordingStartTime = null;
+            }
+        }
+        
+        // 使用實時轉錄的文字發送（作為語音輸入）
+        async function sendTextAsVoice(text) {
+            setStatus('正在處理...');
+            
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        text: text,
+                        history: conversationHistory,
+                        userIdentity: currentUserIdentity,
+                        userName: currentUserName,
+                    }),
+                });
+                
+                    const data = await response.json();
+                    const messageElement = addMessage('assistant', data.reply);
+                    
+                    if (data.history) {
+                        conversationHistory = data.history;
+                    }
+                    
+                    if (data.reply) {
+                        playTextAsSpeech(data.reply, data.emotion, messageElement);
+                    }
+            } catch (error) {
+                console.error('Error:', error);
+                addMessage('assistant', '抱歉，我遇到了一些問題 😅');
+            } finally {
+                setStatus('');
+            }
+        }
+
+        // 停止錄音
+        function stopRecording() {
+            if (mediaRecorder && isRecording) {
+                // 檢查錄音時長（在停止前檢查）
+                const recordingDuration = recordingStartTime ? Date.now() - recordingStartTime : 0;
+                
+                if (recordingDuration < MIN_RECORDING_DURATION) {
+                    console.warn(`⚠️ 錄音時長太短: ${(recordingDuration / 1000).toFixed(2)} 秒，建議繼續錄音...`);
+                    setStatus(`💡 建議至少錄製 ${(MIN_RECORDING_DURATION / 1000).toFixed(1)} 秒（目前 ${(recordingDuration / 1000).toFixed(1)} 秒）`);
+                    
+                    // 如果真的很短（< 0.3秒），強制繼續錄音
+                    if (recordingDuration < 300) {
+                        console.log('⏸️ 錄音太短，繼續錄音...');
+                        return;
+                    }
+                    // 如果接近最小值，允許停止但會顯示警告
+                }
+                
+                console.log('⏹️  停止錄音...');
+                mediaRecorder.stop();
+                isRecording = false;
+                voiceBtn.classList.remove('recording');
+                setStatus('正在處理語音...');
+                
+                // 停止可視化動畫
+                if (animationFrameId) {
+                    cancelAnimationFrame(animationFrameId);
+                    animationFrameId = null;
+                }
+                
+                // 停止語音識別
+                if (recognition) {
+                    recognition.stop();
+                }
+            }
+        }
+
+        // 工具函數
+        function blobToBase64(blob) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    const base64 = reader.result.split(',')[1];
+                    resolve(base64);
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+        }
+
+        function setStatus(text) {
+            statusEl.textContent = text;
+        }
+
+        // 事件監聽
+        sendBtn.addEventListener('click', sendTextMessage);
+        textInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendTextMessage();
+        });
+
+        // 語音按鈕事件（按住說話）
+        voiceBtn.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            startRecording();
+        });
+        voiceBtn.addEventListener('mouseup', (e) => {
+            e.preventDefault();
+            stopRecording();
+        });
+        voiceBtn.addEventListener('mouseleave', (e) => {
+            if (isRecording) {
+                stopRecording();
+            }
+        });
+        
+        // 觸摸事件（移動設備）
+        voiceBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            startRecording();
+        });
+        voiceBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            stopRecording();
+        });
+        voiceBtn.addEventListener('touchcancel', (e) => {
+            e.preventDefault();
+            if (isRecording) {
+                stopRecording();
+            }
+        });
+        
+        // 點擊事件（備用：點擊開始，再次點擊停止）
+        let clickTimer = null;
+        voiceBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (!isRecording) {
+                startRecording();
+                // 自動在 30 秒後停止（防止忘記）
+                clickTimer = setTimeout(() => {
+                    if (isRecording) {
+                        console.log('⏰ 自動停止錄音（30秒超時）');
+                        stopRecording();
+                    }
+                }, 30000);
+            } else {
+                if (clickTimer) clearTimeout(clickTimer);
+                stopRecording();
+            }
+        });
+        
+        // 初始化語音識別
+        initSpeechRecognition();
+    </script>
+</body>
+</html>
+

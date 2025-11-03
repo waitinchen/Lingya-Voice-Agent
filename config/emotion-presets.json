@@ -1,0 +1,117 @@
+{
+  "base": {
+    "speed": 1.0,
+    "volume": 1.0,
+    "textCues": [],
+    "sfx": []
+  },
+  "whisper": {
+    "speed": -0.15,
+    "volume": -0.25,
+    "textCues": ["(小聲)…"],
+    "sfx": ["breath-soft-120.wav"]
+  },
+  "breathy": {
+    "speed": 0.0,
+    "volume": -0.10,
+    "textCues": [],
+    "sfx": ["breath-mid-200.wav"]
+  },
+  "softer": {
+    "speed": 0.0,
+    "volume": -0.15,
+    "textCues": [],
+    "sfx": []
+  },
+  "excited": {
+    "speed": 0.10,
+    "volume": 0.10,
+    "textCues": ["(開心)"],
+    "sfx": ["giggle-80.wav"]
+  },
+  "angry": {
+    "speed": 0.15,
+    "volume": 0.20,
+    "textCues": ["(不悅)"],
+    "sfx": []
+  },
+  "smile": {
+    "speed": 0.05,
+    "volume": 0.05,
+    "textCues": ["(微笑)"],
+    "sfx": []
+  },
+  "fast": {
+    "speed": 0.15,
+    "volume": 0.0,
+    "textCues": [],
+    "sfx": []
+  },
+  "slow": {
+    "speed": -0.15,
+    "volume": 0.0,
+    "textCues": [],
+    "sfx": []
+  },
+  "louder": {
+    "speed": 0.0,
+    "volume": 0.15,
+    "textCues": [],
+    "sfx": []
+  },
+  "quieter": {
+    "speed": 0.0,
+    "volume": -0.15,
+    "textCues": [],
+    "sfx": []
+  },
+  "neutral": {
+    "speed": 0.0,
+    "volume": 0.0,
+    "textCues": [],
+    "sfx": []
+  },
+  "flirty": {
+    "speed": 0.0,
+    "volume": -0.08,
+    "textCues": [],
+    "sfx": ["breath-soft-120.wav"]
+  },
+  "thoughtful": {
+    "speed": -0.10,
+    "volume": 0.0,
+    "textCues": [],
+    "sfx": []
+  },
+  "playful": {
+    "speed": 0.08,
+    "volume": 0.05,
+    "textCues": ["(嘻嘻)"],
+    "sfx": []
+  },
+  "cute": {
+    "speed": 0.05,
+    "volume": 0.03,
+    "textCues": ["(可愛)"],
+    "sfx": []
+  },
+  "warm": {
+    "speed": -0.08,
+    "volume": -0.12,
+    "textCues": [],
+    "sfx": ["breath-soft-120.wav"]
+  },
+  "tender": {
+    "speed": -0.05,
+    "volume": -0.10,
+    "textCues": [],
+    "sfx": ["breath-soft-120.wav"]
+  },
+  "emotional": {
+    "speed": 0.0,
+    "volume": -0.05,
+    "textCues": [],
+    "sfx": ["breath-mid-200.wav"]
+  }
+}
+
