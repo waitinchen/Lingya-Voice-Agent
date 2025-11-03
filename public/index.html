@@ -263,6 +263,7 @@
         .audio-player {
             flex: 1;
             height: 30px;
+            display: block !important; /* 確保播放器始終顯示 */
         }
 
         .chat-input {
@@ -1119,6 +1120,28 @@
                         setStatus('');
                     });
                     
+                    // 確保播放器顯示（無論自動播放是否成功）
+                    if (messageElement) {
+                        const audioPlayer = messageElement.querySelector('.audio-player');
+                        if (audioPlayer) {
+                            audioPlayer.style.display = 'block';
+                            // 添加點擊播放的事件監聽器
+                            audioPlayer.addEventListener('play', () => {
+                                console.log('✅ 用戶播放語音');
+                                isVoicePlaying = true;
+                                isVoiceGenerating = true;
+                                setInputEnabled(false);
+                            }, { once: true });
+                            
+                            audioPlayer.addEventListener('pause', () => {
+                                console.log('⏸️ 用戶暫停語音');
+                                if (audioPlayer.paused) {
+                                    isVoicePlaying = false;
+                                }
+                            });
+                        }
+                    }
+                    
                     // 開始播放（添加錯誤處理以應對自動播放限制）
                     try {
                         // 嘗試自動播放
@@ -1129,28 +1152,14 @@
                         }
                     } catch (playError) {
                         console.warn('⚠️ 自動播放被阻止，需要用戶交互:', playError);
-                        // 如果自動播放失敗，顯示播放器讓用戶手動播放
-                        if (messageElement) {
-                            const audioPlayer = messageElement.querySelector('.audio-player');
-                            if (audioPlayer) {
-                                audioPlayer.style.display = 'block';
-                                setStatus('請點擊播放按鈕收聽語音');
-                                // 添加點擊播放的事件監聽器（用戶點擊後可以播放）
-                                audioPlayer.addEventListener('play', () => {
-                                    console.log('✅ 用戶手動播放語音');
-                                    isVoicePlaying = true;
-                                    isVoiceGenerating = true;
-                                    setInputEnabled(false);
-                                }, { once: true });
-                            }
-                        }
-                        // 重置狀態（但保持音頻對象，等待用戶點擊）
-                        // 不要完全重置，讓用戶可以點擊播放
+                        // 如果自動播放失敗，顯示提示，但播放器已經顯示了
+                        setStatus('請點擊播放按鈕收聽語音（自動播放被瀏覽器阻止）');
+                        // 重置狀態（但保持音頻對象和播放器顯示）
                         isVoicePlaying = false;
                         isVoiceGenerating = false;
-                        // 不設置 currentAudio = null，保留引用以便後續播放
+                        // 保留 currentAudio 引用，讓用戶可以點擊播放
                         setInputEnabled(true);
-                        // 3秒後清除提示
+                        // 5秒後清除提示
                         setTimeout(() => setStatus(''), 5000);
                     }
                 } else {
@@ -1180,6 +1189,8 @@
                 const audio = existingAudio.querySelector('audio');
                 if (audio) {
                     audio.src = audioUrl;
+                    audio.load(); // 重新載入音頻
+                    audio.style.display = 'block'; // 確保顯示
                 }
                 return;
             }
@@ -1189,12 +1200,19 @@
             if (messageContent) {
                 const audioHtml = `
                     <div class="message-audio">
-                        <audio class="audio-player" controls>
+                        <audio class="audio-player" controls preload="auto">
                             <source src="${audioUrl}" type="audio/wav">
                         </audio>
                     </div>
                 `;
                 messageContent.insertAdjacentHTML('beforeend', audioHtml);
+                
+                // 確保播放器立即顯示
+                const audioPlayer = messageContent.querySelector('.audio-player');
+                if (audioPlayer) {
+                    audioPlayer.style.display = 'block';
+                    console.log('✅ 音頻播放器已添加到消息中');
+                }
             }
         }
 

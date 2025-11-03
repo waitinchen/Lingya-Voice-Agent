@@ -155,6 +155,14 @@ export async function synthesizeSpeechCartesia(
  */
 export async function synthesizeSpeechCartesiaToBuffer(text, options = {}) {
   try {
+    // 檢查必要的環境變數
+    if (!process.env.CARTESIA_API_KEY) {
+      throw new Error("CARTESIA_API_KEY environment variable is missing");
+    }
+    if (!process.env.CARTESIA_VOICE_ID) {
+      throw new Error("CARTESIA_VOICE_ID environment variable is missing");
+    }
+    
     const { tags = [], emotion } = options;
     
     // 導入情緒處理模組
@@ -256,12 +264,24 @@ export async function synthesizeSpeechCartesiaToBuffer(text, options = {}) {
       }
     }
     
+    if (!audioBuffer || audioBuffer.length === 0) {
+      throw new Error("Cartesia TTS returned empty audio buffer");
+    }
+    
+    console.log(`✅ Cartesia TTS 成功生成音頻，大小: ${(audioBuffer.length / 1024).toFixed(2)} KB`);
     return audioBuffer;
   } catch (err) {
     console.error("❌ Cartesia TTS 錯誤：", err.message);
     if (err.response) {
       console.error("   錯誤詳情:", err.response);
     }
-    return null;
+    if (err.statusCode) {
+      console.error("   HTTP 狀態碼:", err.statusCode);
+    }
+    if (err.stack) {
+      console.error("   錯誤堆疊:", err.stack);
+    }
+    // 不要返回 null，而是拋出錯誤，讓調用者知道具體問題
+    throw err;
   }
 }

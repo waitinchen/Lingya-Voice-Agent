@@ -218,14 +218,26 @@ app.post("/api/speak-stream", async (req, res) => {
     }
 
     // Step ③-B 增強：支持情緒標籤控制語音語氣
-    const audioBuffer = await synthesizeSpeechCartesiaToBuffer(text, {
-      tags, // 優先使用標籤
-      emotion, // 向後兼容
-      tone,
-    });
+    let audioBuffer;
+    try {
+      audioBuffer = await synthesizeSpeechCartesiaToBuffer(text, {
+        tags, // 優先使用標籤
+        emotion, // 向後兼容
+        tone,
+      });
+    } catch (ttsError) {
+      console.error("❌ TTS 生成失敗:", ttsError);
+      // 返回詳細錯誤信息以便調試
+      const errorMessage = ttsError.message || "TTS failed";
+      const isEnvError = errorMessage.includes("environment variable");
+      return res.status(500).json({ 
+        error: errorMessage,
+        hint: isEnvError ? "請檢查 Railway 環境變數設置" : "TTS API 調用失敗，請檢查 Cartesia API Key 和 Voice ID"
+      });
+    }
 
-    if (!audioBuffer) {
-      return res.status(500).json({ error: "TTS failed" });
+    if (!audioBuffer || audioBuffer.length === 0) {
+      return res.status(500).json({ error: "TTS returned empty audio buffer" });
     }
 
     // 設置正確的 Content-Type（WAV 格式）
