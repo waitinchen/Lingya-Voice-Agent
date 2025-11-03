@@ -9,6 +9,9 @@ yarn-error.log*
 .env.local
 .env.*.local
 
+# 配置文件中可能包含敏感信息
+# config/system-prompt.txt - 已改为可提交（用于管理后台编辑）
+
 # 日誌
 logs/
 *.log

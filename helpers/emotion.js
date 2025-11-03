@@ -78,9 +78,33 @@ export function applyEmotion({ text, tags = [] }) {
   speed = Math.max(0.8, Math.min(1.3, 1 + speed)); // 最終倍數 0.8-1.3
   volume = Math.max(0.8, Math.min(1.2, 1 + volume)); // 最終倍數 0.8-1.2
 
-  // 4) 處理文案注入
+  // 4) 清理特殊符号（不利于语音合成）
   let script = text;
   
+  // 移除 emoji（包括各种 Unicode emoji 范围）
+  script = script.replace(/[\u{1F300}-\u{1F9FF}]/gu, ''); // Emoji Symbols
+  script = script.replace(/[\u{1FA00}-\u{1FAFF}]/gu, ''); // Symbols and Pictographs Extended-A
+  script = script.replace(/[\u{2600}-\u{26FF}]/gu, ''); // Miscellaneous Symbols
+  script = script.replace(/[\u{2700}-\u{27BF}]/gu, ''); // Dingbats
+  script = script.replace(/[\u{1F600}-\u{1F64F}]/gu, ''); // Emoticons
+  script = script.replace(/[\u{1F680}-\u{1F6FF}]/gu, ''); // Transport and Map Symbols
+  script = script.replace(/[\u{1F900}-\u{1F9FF}]/gu, ''); // Supplemental Symbols and Pictographs
+  script = script.replace(/[\u{1FA70}-\u{1FAFF}]/gu, ''); // Symbols and Pictographs Extended-A
+  
+  // 移除其他特殊符号（音乐符号、星星等）
+  script = script.replace(/[🎵🎶🎤🎧🎨🎪🎭🎬🎯🎰🎱🎲🎳🎴🎵🎶🎷🎸🎹🎺🎻🎼🎽🎾🎿🏀🏁🏂🏃🏄🏅🏆🏇🏈🏉🏊🏋🏌🏍🏎🏏🏐🏑🏒🏓🏔🏕🏖🏗🏘🏙🏚🏛🏜🏝🏞🏟🏠🏡🏢🏣🏤🏥🏦🏧🏨🏩🏪🏫🏬🏭🏮🏯🏰🏱🏲🏳🏴🏵🏶🏷🏸🏹🏺]/g, '');
+  
+  // 移除日文特殊字符（如 づ、♡ 等）
+  script = script.replace(/[づ♡♥]/g, '');
+  
+  // 移除其他装饰性符号（但保留中文常用的波浪号 ～）
+  // 移除星星、雪花等装饰性符号（但保留波浪号，因为中文常用）
+  script = script.replace(/[❀❁❂❃❄❅❆❇❈❉❊❋✲✳✴✵✶✷✸✹✺✻✼✽✾✿❀]/g, '');
+  
+  // 清理多余空格
+  script = script.replace(/\s{2,}/g, ' ').trim();
+  
+  // 5) 處理文案注入
   // 在文字前加入 textCues（如果有）
   if (textCues.length > 0) {
     script = `${textCues.join(" ")} ${script}`;

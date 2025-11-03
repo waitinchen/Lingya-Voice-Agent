@@ -8,6 +8,7 @@ import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
 import { CartesiaClient } from "@cartesia/cartesia-js";
+import { mergeVoiceParams, getVoiceParamsDescription } from "./voice-params.js";
 
 dotenv.config();
 
@@ -49,11 +50,16 @@ export async function synthesizeSpeechCartesia(
       }
     }
     
-    // 應用情緒標籤
+    // 應用情緒標籤（文字層處理）
     const { script, speed, volume } = applyEmotion({
       text,
       tags: finalTags,
     });
+
+    // ========================================
+    // 🩵 語氣標籤轉譯層：計算聲音參數
+    // ========================================
+    const voiceParams = mergeVoiceParams(finalTags);
 
     // 如果沒有指定輸出路徑，使用默認路徑
     if (!outputPath) {
@@ -67,9 +73,12 @@ export async function synthesizeSpeechCartesia(
       fs.mkdirSync(outputDir, { recursive: true });
     }
 
-    console.log(`🎙️ 呼叫 Cartesia TTS (標籤: ${finalTags.join(", ") || "無"}) …`);
+    console.log(`🎙️ 呼叫 Cartesia TTS`);
+    console.log(`   標籤: [${finalTags.join(", ") || "無"}]`);
+    console.log(`   ${getVoiceParamsDescription(finalTags)}`);
 
-    const response = await client.tts.bytes({
+    // 構建請求參數
+    const requestParams = {
       modelId: process.env.CARTESIA_TTS_MODEL_ID || "sonic-3",
       transcript: script, // 使用處理後的文字
       voice: {
@@ -83,7 +92,14 @@ export async function synthesizeSpeechCartesia(
         encoding: "pcm_s16le",
       },
       save: true,
-    });
+    };
+    
+    // 如果 Cartesia SDK 支持 voice settings，加入聲音參數
+    if (voiceParams.appliedTags.length > 0) {
+      console.log(`   💡 聲音層參數已計算（pitch=${voiceParams.pitch.toFixed(2)}, rate=${voiceParams.rate.toFixed(2)}, volume=${voiceParams.volume.toFixed(2)}），待 Cartesia API 支持時自動應用`);
+    }
+    
+    const response = await client.tts.bytes(requestParams);
 
     // 處理響應：SDK 返回的可能是流（Stream）
     let audioBuffer;
@@ -158,19 +174,24 @@ export async function synthesizeSpeechCartesiaToBuffer(text, options = {}) {
       }
     }
     
-    // 應用情緒標籤
+    // 應用情緒標籤（文字層處理）
     const { script, speed, volume, sfx, pauses } = applyEmotion({
       text,
       tags: finalTags,
     });
     
-    console.log(`🎙️ 呼叫 Cartesia TTS (標籤: ${finalTags.join(", ") || "無"}, 速度: ${speed.toFixed(2)}, 音量: ${volume.toFixed(2)}) …`);
-
-    // 注意：Cartesia API 可能不支持直接設置 speed/volume
-    // 目前先使用處理後的 script（包含 textCues）
-    // 未來如果 Cartesia 支持 generation_config，可以加入 speed 和 volume
+    // ========================================
+    // 🩵 語氣標籤轉譯層：計算聲音參數
+    // ========================================
+    const voiceParams = mergeVoiceParams(finalTags);
     
-    const response = await client.tts.bytes({
+    console.log(`🎙️ 呼叫 Cartesia TTS`);
+    console.log(`   標籤: [${finalTags.join(", ") || "無"}]`);
+    console.log(`   文字層參數: speed=${speed.toFixed(2)}, volume=${volume.toFixed(2)}`);
+    console.log(`   ${getVoiceParamsDescription(finalTags)}`);
+    
+    // 構建請求參數
+    const requestParams = {
       modelId: process.env.CARTESIA_TTS_MODEL_ID || "sonic-3",
       transcript: script, // 使用處理後的文字（可能包含 textCues）
       voice: {
@@ -184,9 +205,25 @@ export async function synthesizeSpeechCartesiaToBuffer(text, options = {}) {
         encoding: "pcm_s16le",
       },
       save: false, // Buffer 模式不需要保存檔案
-      // 如果 Cartesia SDK 支持，未來可以加入：
-      // generationConfig: { speed, volume }
-    });
+    };
+    
+    // 如果 Cartesia SDK 支持 voice settings 或 generation config，加入聲音參數
+    // 注意：當前 Cartesia API 可能不支持這些參數，但我們先準備好接口
+    // 未來如果支持，可以這樣傳遞：
+    // if (client.tts.bytes.supportsVoiceParams) {
+    //   requestParams.voiceSettings = {
+    //     pitch: voiceParams.pitch,
+    //     rate: voiceParams.rate,
+    //     volume: voiceParams.volume,
+    //   };
+    // }
+    
+    // 目前先記錄參數，用於調試和未來擴展
+    if (voiceParams.appliedTags.length > 0) {
+      console.log(`   💡 聲音層參數已計算（pitch=${voiceParams.pitch.toFixed(2)}, rate=${voiceParams.rate.toFixed(2)}, volume=${voiceParams.volume.toFixed(2)}），待 Cartesia API 支持時自動應用`);
+    }
+    
+    const response = await client.tts.bytes(requestParams);
 
     // 處理響應：SDK 返回的可能是流（Stream）
     let audioBuffer;

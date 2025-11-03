@@ -139,17 +139,55 @@ app.post("/api/chat", async (req, res) => {
 });
 
 // Step ②-B: 語音合成端點（使用 Cartesia，支持情緒標籤）
+// 升級版：整合 LLM 自動推理語氣標籤（語氣隨思）
 app.post("/api/speak", async (req, res) => {
   try {
-    const { text, tags = [], emotion } = req.body;
+    const { text, tags = [], emotion, autoTags = true, userIdentity, userName } = req.body;
 
     if (!text) {
       return res.status(400).json({ error: "Missing text input" });
     }
 
+    let finalTags = [...tags];
+    
+    // ========================================
+    // 🩵 自動推理語氣標籤（如果啟用）
+    // ========================================
+    if (autoTags && tags.length === 0 && !emotion) {
+      console.log("🧠 自動推理語氣標籤...");
+      
+      // 檢測用戶身份
+      let detectedIdentity = userIdentity;
+      if (!detectedIdentity && userName) {
+        if (userName === "陳威廷" || userName === "陈威廷" || userName.toLowerCase().includes("威廷")) {
+          detectedIdentity = "dad";
+        }
+      }
+      
+      // 使用 LLM 選擇語氣標籤（不生成完整回復，只選擇標籤）
+      const { chatWithLLM } = await import("./modules/llm.js");
+      const llmResult = await chatWithLLM(
+        `請為以下文字選擇 0-3 個適合的語氣標籤（只需選擇標籤，不需要生成回復）：\n\n"${text}"`,
+        [],
+        {
+          enableTags: true,
+          userIdentity: detectedIdentity,
+          userName: userName,
+          skipReply: false, // 仍然需要生成回復，但會提取標籤
+        }
+      );
+      
+      if (llmResult.tags && llmResult.tags.length > 0) {
+        finalTags = llmResult.tags;
+        console.log(`✅ LLM 自動選擇標籤: [${finalTags.join(", ")}]`);
+      } else {
+        console.log("💡 LLM 未選擇標籤，使用默認");
+      }
+    }
+
     // 使用 Cartesia TTS 生成語音檔案（支持標籤）
     const filePath = await synthesizeSpeechCartesia(text, null, {
-      tags,
+      tags: finalTags,
       emotion,
     });
 
@@ -392,6 +430,130 @@ app.get("/admin", (req, res) => {
   }
 });
 
+// ========================================
+// 🎧 即時語氣預覽端點
+// ========================================
+app.post("/api/preview", async (req, res) => {
+  try {
+    const { text, tags = [] } = req.body;
+
+    if (!text) {
+      return res.status(400).json({ error: "Missing text input" });
+    }
+
+    if (!tags || tags.length === 0) {
+      return res.status(400).json({ error: "Missing tags. Please provide at least one tag." });
+    }
+
+    console.log(`🎧 語氣預覽: "${text}" [${tags.join(", ")}]`);
+
+    // 使用 Cartesia TTS 生成語音 Buffer
+    const audioBuffer = await synthesizeSpeechCartesiaToBuffer(text, {
+      tags,
+    });
+
+    if (!audioBuffer) {
+      return res.status(500).json({ error: "TTS failed" });
+    }
+
+    // 設置正確的 Content-Type（WAV 格式）
+    res.setHeader("Content-Type", "audio/wav");
+    res.setHeader("Content-Length", audioBuffer.length);
+    res.setHeader("X-Tags", tags.join(",")); // 方便前端知道使用了哪些標籤
+    res.send(audioBuffer);
+  } catch (error) {
+    console.error("❌ 語氣預覽失敗:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ========================================
+// 🔮 Cartesia 聲音快取（Voice Preset Profile）
+// ========================================
+app.get("/api/preset/:presetName", async (req, res) => {
+  try {
+    const { presetName } = req.params;
+    const { text } = req.query;
+
+    if (!text) {
+      return res.status(400).json({ error: "Missing text parameter. Use: /api/preset/:presetName?text=..." });
+    }
+
+    // 載入預設配置
+    const presetsPath = path.join(process.cwd(), "config", "voice-presets.json");
+    let presets;
+    
+    try {
+      presets = JSON.parse(fs.readFileSync(presetsPath, "utf8"));
+    } catch (error) {
+      console.error("❌ 無法載入 voice-presets.json");
+      return res.status(500).json({ error: "Voice presets not available" });
+    }
+
+    const preset = presets[presetName.toLowerCase()];
+
+    if (!preset) {
+      const availablePresets = Object.keys(presets).join(", ");
+      return res.status(404).json({ 
+        error: `Preset '${presetName}' not found. Available presets: ${availablePresets}` 
+      });
+    }
+
+    console.log(`🔮 使用預設語氣 "${preset.name}": "${text}" [${preset.tags.join(", ")}]`);
+
+    // 使用預設標籤生成語音
+    const audioBuffer = await synthesizeSpeechCartesiaToBuffer(text, {
+      tags: preset.tags,
+    });
+
+    if (!audioBuffer) {
+      return res.status(500).json({ error: "TTS failed" });
+    }
+
+    // 設置正確的 Content-Type（WAV 格式）
+    res.setHeader("Content-Type", "audio/wav");
+    res.setHeader("Content-Length", audioBuffer.length);
+    res.setHeader("X-Preset-Name", preset.name);
+    res.setHeader("X-Preset-Description", preset.description);
+    res.setHeader("X-Preset-Tags", preset.tags.join(","));
+    res.send(audioBuffer);
+  } catch (error) {
+    console.error("❌ 預設語氣失敗:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 獲取所有可用的預設
+app.get("/api/preset", async (req, res) => {
+  try {
+    const presetsPath = path.join(process.cwd(), "config", "voice-presets.json");
+    let presets;
+    
+    try {
+      presets = JSON.parse(fs.readFileSync(presetsPath, "utf8"));
+    } catch (error) {
+      console.error("❌ 無法載入 voice-presets.json");
+      return res.status(500).json({ error: "Voice presets not available" });
+    }
+
+    // 格式化預設列表（只返回基本信息）
+    const presetList = Object.keys(presets).map(key => ({
+      id: key,
+      name: presets[key].name,
+      description: presets[key].description,
+      tags: presets[key].tags,
+    }));
+
+    res.json({
+      success: true,
+      presets: presetList,
+    });
+  } catch (error) {
+    console.error("❌ 獲取預設列表失敗:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // OpenAI TTS 端點（保留以便切換）- 可選
 app.post("/api/speak-openai", async (req, res) => {
   try {
@@ -427,6 +589,8 @@ app.listen(PORT, () => {
   console.log(`   🔐 管理後台: http://localhost:${PORT}/admin (帳號/密碼: admin/admin)`);
   console.log(`   📝 文字對話: POST http://localhost:${PORT}/api/chat`);
   console.log(`   🎙️  語音對話: POST http://localhost:${PORT}/api/voice-chat`);
-  console.log(`   🔊 語音合成: POST http://localhost:${PORT}/api/speak (Cartesia) 🎙️`);
+  console.log(`   🔊 語音合成: POST http://localhost:${PORT}/api/speak (Cartesia，支持自動推理標籤) 🎙️`);
+  console.log(`   🎧 語氣預覽: POST http://localhost:${PORT}/api/preview (快速試聽語氣組合)`);
+  console.log(`   🔮 聲音快取: GET http://localhost:${PORT}/api/preset/:name?text=... (預設語氣)`);
   console.log(`   🎤 語音識別: POST http://localhost:${PORT}/api/transcribe\n`);
 });

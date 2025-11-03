@@ -20,6 +20,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.68.0",
     "@cartesia/cartesia-js": "^2.2.7",
     "axios": "^1.6.2",
     "cookie-parser": "^1.4.7",

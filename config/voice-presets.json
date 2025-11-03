@@ -1,0 +1,43 @@
+{
+  "gentle": {
+    "name": "溫柔語氣",
+    "description": "溫暖安撫的語氣，適合安慰和親近",
+    "tags": ["warm", "tender"]
+  },
+  "cute": {
+    "name": "可愛語氣",
+    "description": "撒嬌可愛的語氣，適合調皮和親暱",
+    "tags": ["flirty", "playful"]
+  },
+  "serious": {
+    "name": "認真語氣",
+    "description": "嚴肅認真的語氣，適合討論重要話題",
+    "tags": ["neutral", "thoughtful"]
+  },
+  "excited": {
+    "name": "興奮語氣",
+    "description": "開心興奮的語氣，適合分享喜悅",
+    "tags": ["excited", "smile"]
+  },
+  "soft": {
+    "name": "輕柔語氣",
+    "description": "輕柔細語的語氣，適合私密對話",
+    "tags": ["whisper", "softer", "breathy"]
+  },
+  "angry": {
+    "name": "生氣語氣",
+    "description": "生氣不悅的語氣，適合表達不滿",
+    "tags": ["angry", "louder"]
+  },
+  "emotional": {
+    "name": "情感豐富",
+    "description": "充滿情感的語氣，適合表達感動",
+    "tags": ["emotional", "tender"]
+  },
+  "default": {
+    "name": "默認語氣",
+    "description": "自然中性的語氣",
+    "tags": ["neutral"]
+  }
+}
+

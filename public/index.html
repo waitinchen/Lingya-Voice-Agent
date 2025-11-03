@@ -272,17 +272,18 @@
         /* 声音波浪可视化 */
         .voice-visualizer {
             position: fixed;
-            top: 50%;
+            top: 30%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 300px;
-            height: 150px;
-            background: rgba(0, 0, 0, 0.8);
-            border-radius: 20px;
-            padding: 20px;
+            width: 280px;
+            height: 140px;
+            background: rgba(0, 0, 0, 0.85);
+            border-radius: 18px;
+            padding: 18px;
             display: none;
             z-index: 1000;
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
         }
 
         .voice-visualizer.active {
@@ -291,38 +292,40 @@
 
         .voice-visualizer canvas {
             width: 100%;
-            height: 100%;
-            border-radius: 10px;
+            height: calc(100% - 25px);
+            border-radius: 8px;
         }
 
         .voice-visualizer-text {
             position: absolute;
-            bottom: 10px;
+            bottom: 8px;
             left: 50%;
             transform: translateX(-50%);
-            color: white;
-            font-size: 12px;
+            color: #4ade80;
+            font-size: 11px;
             text-align: center;
             width: 90%;
+            font-weight: 500;
         }
 
         /* 实时转录文字显示 */
         .realtime-transcript {
             position: fixed;
-            bottom: 120px;
+            top: 50%;
             left: 50%;
-            transform: translateX(-50%);
+            transform: translate(-50%, -50%);
             background: rgba(102, 126, 234, 0.95);
             color: white;
-            padding: 15px 20px;
-            border-radius: 15px;
-            max-width: 600px;
-            width: 90%;
+            padding: 12px 18px;
+            border-radius: 12px;
+            max-width: 500px;
+            width: 80%;
             display: none;
-            z-index: 999;
+            z-index: 1001;
             box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
-            font-size: 16px;
+            font-size: 15px;
             text-align: center;
+            backdrop-filter: blur(10px);
         }
 
         .realtime-transcript.active {
@@ -342,12 +345,36 @@
         }
 
         .realtime-transcript .transcript-text {
-            margin-bottom: 5px;
+            margin-bottom: 3px;
+            font-weight: 500;
+            min-height: 20px;
         }
 
         .realtime-transcript .transcript-hint {
-            font-size: 12px;
-            opacity: 0.8;
+            font-size: 11px;
+            opacity: 0.7;
+            margin-top: 3px;
+        }
+        
+        /* 手机端优化 */
+        @media (max-width: 768px) {
+            .realtime-transcript {
+                top: 45%;
+                max-width: 85%;
+                padding: 10px 15px;
+                font-size: 14px;
+            }
+            
+            .voice-visualizer {
+                width: 250px;
+                height: 120px;
+                padding: 15px;
+            }
+            
+            .voice-visualizer-text {
+                font-size: 11px;
+                bottom: 8px;
+            }
         }
 
         .loading {
@@ -364,6 +391,48 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        
+        /* 三颗球跳跃动画 */
+        .thinking-animation {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            border-radius: 20px;
+            box-shadow: 0 4px 15px rgba(245, 87, 108, 0.3);
+        }
+        
+        .thinking-ball {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: white;
+            animation: bounce 1.4s ease-in-out infinite;
+        }
+        
+        .thinking-ball:nth-child(1) {
+            animation-delay: 0s;
+        }
+        
+        .thinking-ball:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+        
+        .thinking-ball:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+        
+        @keyframes bounce {
+            0%, 80%, 100% {
+                transform: translateY(0) scale(1);
+                opacity: 0.7;
+            }
+            40% {
+                transform: translateY(-20px) scale(1.1);
+                opacity: 1;
+            }
+        }
     </style>
 </head>
 <body>
@@ -376,7 +445,7 @@
             <div class="message assistant">
                 <div class="message-avatar">🌸</div>
                 <div class="message-content">
-                    你好！我是花小軟，很高興認識你！你可以打字或按住語音按鈕說話 💫
+                    我是花小軟。
                 </div>
             </div>
         </div>
@@ -401,7 +470,6 @@
     <!-- 实时转录显示 -->
     <div class="realtime-transcript" id="realtimeTranscript">
         <div class="transcript-text" id="transcriptText"></div>
-        <div class="transcript-hint">实时转录中...</div>
     </div>
 
     <script>
@@ -409,6 +477,11 @@
         const textInput = document.getElementById('textInput');
         const sendBtn = document.getElementById('sendBtn');
         const voiceBtn = document.getElementById('voiceBtn');
+        
+        // 状态管理：防止语音重叠
+        let isVoiceGenerating = false; // 是否正在生成语音
+        let isVoicePlaying = false; // 是否正在播放语音
+        let currentAudio = null; // 当前播放的音频对象
         const statusEl = document.getElementById('status');
         
         let conversationHistory = []; // Step ③-B: 對話歷史記憶
@@ -426,6 +499,11 @@
         let microphone = null;
         let dataArray = null;
         let animationFrameId = null;
+        
+        // 静音检测（自动停止录音）
+        let silenceStartTime = null; // 静音开始时间
+        const SILENCE_THRESHOLD = 30; // 音量阈值（0-255，低于此值视为静音）
+        const MAX_SILENCE_DURATION = 4000; // 最大静音时长（毫秒）：4秒
         
         // 实时语音识别
         let recognition = null;
@@ -446,7 +524,7 @@
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
         
-        // 绘制音频波形
+        // 绘制音频波形（带静音检测）
         function drawWaveform() {
             if (!analyser || !isRecording) {
                 animationFrameId = null;
@@ -454,6 +532,41 @@
             }
             
             analyser.getByteFrequencyData(dataArray);
+            
+            // 计算平均音量（用于静音检测）
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+                sum += dataArray[i];
+            }
+            const averageVolume = sum / dataArray.length;
+            
+            // 静音检测逻辑
+            if (averageVolume < SILENCE_THRESHOLD) {
+                // 检测到静音
+                if (silenceStartTime === null) {
+                    // 记录静音开始时间
+                    silenceStartTime = Date.now();
+                    console.log('🔇 检测到静音，开始计时...');
+                } else {
+                    // 检查静音持续时间
+                    const silenceDuration = Date.now() - silenceStartTime;
+                    if (silenceDuration >= MAX_SILENCE_DURATION) {
+                        // 静音超过4秒，自动停止录音
+                        console.log(`⏰ 静音超过 ${MAX_SILENCE_DURATION / 1000} 秒，自动停止录音并发送`);
+                        silenceStartTime = null;
+                        if (mediaRecorder && isRecording) {
+                            stopRecording();
+                        }
+                        return;
+                    }
+                }
+            } else {
+                // 有声音，重置静音计时
+                if (silenceStartTime !== null) {
+                    silenceStartTime = null;
+                    console.log('🔊 检测到声音，重置静音计时');
+                }
+            }
             
             ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -507,6 +620,10 @@
                     if (realtimeTranscript) {
                         transcriptTextEl.textContent = realtimeTranscript;
                         transcriptEl.classList.add('active');
+                    } else {
+                        // 如果没有转录内容，显示提示
+                        transcriptTextEl.textContent = '正在识别语音...';
+                        transcriptEl.classList.add('active');
                     }
                 };
                 
@@ -529,14 +646,47 @@
             }
         }
 
+        // 啟用/禁用輸入
+        function setInputEnabled(enabled) {
+            textInput.disabled = !enabled;
+            sendBtn.disabled = !enabled;
+            voiceBtn.disabled = !enabled;
+            
+            if (enabled) {
+                textInput.style.opacity = '1';
+                sendBtn.style.opacity = '1';
+                voiceBtn.style.opacity = '1';
+                sendBtn.style.cursor = 'pointer';
+                voiceBtn.style.cursor = 'pointer';
+            } else {
+                textInput.style.opacity = '0.5';
+                sendBtn.style.opacity = '0.5';
+                voiceBtn.style.opacity = '0.5';
+                sendBtn.style.cursor = 'not-allowed';
+                voiceBtn.style.cursor = 'not-allowed';
+            }
+        }
+
         // 發送文字訊息
         async function sendTextMessage() {
             const text = textInput.value.trim();
             if (!text) return;
+            
+            // 如果正在生成或播放语音，阻止发送
+            if (isVoiceGenerating || isVoicePlaying) {
+                console.log('⏸️ 语音正在生成/播放中，请稍候...');
+                setStatus('花小軟正在说话，请稍候...');
+                setTimeout(() => setStatus(''), 2000);
+                return;
+            }
 
             addMessage('user', text);
             textInput.value = '';
             setStatus('正在思考...');
+            
+            // 禁用输入，开始生成
+            setInputEnabled(false);
+            isVoiceGenerating = true;
 
             try {
                 const response = await fetch('/api/chat', {
@@ -567,20 +717,38 @@
                 
                 // 生成並播放語音（帶情緒控制），並添加到消息中
                 if (data.reply) {
-                    playTextAsSpeech(data.reply, data.emotion, messageElement);
+                    await playTextAsSpeech(data.reply, data.emotion, messageElement);
                 }
             } catch (error) {
                 addMessage('assistant', '抱歉，我遇到了一些問題 😅');
                 console.error('Error:', error);
             } finally {
                 setStatus('');
+                // 语音生成完成，但播放可能还在进行，playTextAsSpeech 会处理
+                isVoiceGenerating = false;
+                // 如果不在播放，重新启用输入
+                if (!isVoicePlaying) {
+                    setInputEnabled(true);
+                }
             }
         }
 
         // 發送語音訊息
         async function sendVoiceMessage(audioBlob, fileExtension = 'webm') {
+            // 如果正在生成或播放语音，阻止发送
+            if (isVoiceGenerating || isVoicePlaying) {
+                console.log('⏸️ 语音正在生成/播放中，请稍候...');
+                setStatus('花小軟正在说话，请稍候...');
+                setTimeout(() => setStatus(''), 2000);
+                return;
+            }
+            
             setStatus('正在處理語音...');
             console.log(`📤 發送語音訊息，大小: ${(audioBlob.size / 1024).toFixed(2)} KB`);
+            
+            // 禁用输入
+            setInputEnabled(false);
+            isVoiceGenerating = true;
 
             try {
                 const formData = new FormData();
@@ -613,14 +781,78 @@
                 console.log('📦 回應數據:', data);
                 
                 if (data.success) {
-                    // 顯示用戶說的話
-                    addMessage('user', data.transcribedText, true);
+                    // 顯示用戶說的話（语音转文字的结果显示在右侧气泡）
+                    if (data.transcribedText && data.transcribedText.trim()) {
+                        addMessage('user', data.transcribedText, true);
+                        console.log('📝 用户语音转文字:', data.transcribedText);
+                    } else {
+                        console.warn('⚠️ 未收到转录文字');
+                    }
                     
                     // 顯示花小軟回應
-                    addMessage('assistant', data.text, true, data.audio);
+                    const messageElement = addMessage('assistant', data.text, true, data.audio);
                     
                     // 更新對話歷史（Step ③-B: 保持記憶）
                     conversationHistory = data.history || [];
+                    
+                    // 如果有音頻，自動播放（語音輸入已包含音頻）
+                    if (data.audio) {
+                        // 等待一下確保 DOM 更新
+                        setTimeout(async () => {
+                            const audioElement = messageElement.querySelector('audio');
+                            if (audioElement) {
+                                // 如果正在播放，停止当前播放
+                                if (currentAudio && !currentAudio.paused && currentAudio !== audioElement) {
+                                    currentAudio.pause();
+                                    currentAudio.currentTime = 0;
+                                    console.log('⏹️ 停止当前播放的语音');
+                                }
+                                
+                                currentAudio = audioElement;
+                                isVoicePlaying = true;
+                                
+                                // 播放完成後重新啟用輸入
+                                audioElement.addEventListener('ended', () => {
+                                    console.log('✅ 語音播放完成');
+                                    isVoicePlaying = false;
+                                    isVoiceGenerating = false;
+                                    currentAudio = null;
+                                    setInputEnabled(true);
+                                    setStatus('');
+                                }, { once: true });
+                                
+                                // 播放錯誤處理
+                                audioElement.addEventListener('error', () => {
+                                    console.error('❌ 音頻播放錯誤');
+                                    isVoicePlaying = false;
+                                    isVoiceGenerating = false;
+                                    currentAudio = null;
+                                    setInputEnabled(true);
+                                    setStatus('');
+                                }, { once: true });
+                                
+                                // 開始播放
+                                try {
+                                    await audioElement.play();
+                                    console.log('🔊 開始播放語音');
+                                } catch (playError) {
+                                    console.error('❌ 播放失敗:', playError);
+                                    isVoicePlaying = false;
+                                    isVoiceGenerating = false;
+                                    currentAudio = null;
+                                    setInputEnabled(true);
+                                }
+                            } else {
+                                // 沒有音頻元素，直接啟用輸入
+                                isVoiceGenerating = false;
+                                setInputEnabled(true);
+                            }
+                        }, 100);
+                    } else {
+                        // 沒有音頻，直接啟用輸入
+                        isVoiceGenerating = false;
+                        setInputEnabled(true);
+                    }
                     
                     // 可選：顯示檢測到的情緒
                     if (data.emotion && data.emotion !== '平靜') {
@@ -643,7 +875,12 @@
                 console.error('❌ 語音處理錯誤:', error);
                 addMessage('assistant', `語音處理遇到問題，請稍後再試 😅 (${error.message})`);
             } finally {
-                setStatus('');
+                // 如果不在播放，重新启用输入
+                if (!isVoicePlaying) {
+                    isVoiceGenerating = false;
+                    setInputEnabled(true);
+                }
+                setTimeout(() => setStatus(''), 3000);
             }
         }
 
@@ -682,7 +919,17 @@
 
         // 播放文字為語音（支持情緒控制），並添加到消息中
         async function playTextAsSpeech(text, emotion = null, messageElement = null) {
+            // 如果正在播放，停止当前播放
+            if (currentAudio && !currentAudio.paused) {
+                currentAudio.pause();
+                currentAudio.currentTime = 0;
+                console.log('⏹️ 停止当前播放的语音');
+            }
+            
             try {
+                // 标记为正在生成
+                isVoiceGenerating = true;
+                
                 const response = await fetch('/api/speak-stream', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -701,12 +948,44 @@
                         addAudioPlayerToMessage(messageElement, audioUrl);
                     }
                     
-                    // 自動播放
+                    // 創建新的音頻對象並播放
                     const audio = new Audio(audioUrl);
-                    audio.play();
+                    currentAudio = audio;
+                    
+                    // 標記為正在播放
+                    isVoicePlaying = true;
+                    
+                    // 播放完成後重新啟用輸入
+                    audio.addEventListener('ended', () => {
+                        console.log('✅ 語音播放完成');
+                        isVoicePlaying = false;
+                        isVoiceGenerating = false;
+                        currentAudio = null;
+                        setInputEnabled(true);
+                        setStatus('');
+                    });
+                    
+                    // 播放錯誤處理
+                    audio.addEventListener('error', (e) => {
+                        console.error('❌ 音頻播放錯誤:', e);
+                        isVoicePlaying = false;
+                        isVoiceGenerating = false;
+                        currentAudio = null;
+                        setInputEnabled(true);
+                        setStatus('');
+                    });
+                    
+                    // 開始播放
+                    await audio.play();
+                    console.log('🔊 開始播放語音');
                 }
             } catch (error) {
                 console.error('TTS Error:', error);
+                isVoiceGenerating = false;
+                isVoicePlaying = false;
+                currentAudio = null;
+                setInputEnabled(true);
+                setStatus('');
             }
         }
         
@@ -785,6 +1064,7 @@
                 
                 audioChunks = [];
                 realtimeTranscript = ''; // 重置轉錄文字
+                silenceStartTime = null; // 重置静音计时
                 
                 mediaRecorder.ondataavailable = (event) => {
                     if (event.data.size > 0) {
@@ -797,9 +1077,12 @@
                     const recordingDuration = recordingStartTime ? Date.now() - recordingStartTime : 0;
                     console.log(`✅ 錄音完成，共 ${audioChunks.length} 個數據塊，時長: ${(recordingDuration / 1000).toFixed(2)} 秒`);
                     
-                    // 停止可視化
-                    visualizerEl.classList.remove('active');
-                    transcriptEl.classList.remove('active');
+                    // 停止可視化（延迟一小段时间，让用户看到最终转录结果）
+                    setTimeout(() => {
+                        visualizerEl.classList.remove('active');
+                        transcriptEl.classList.remove('active');
+                        if (transcriptTextEl) transcriptTextEl.textContent = '';
+                    }, 500);
                     
                     // 停止語音識別
                     if (recognition) {
@@ -822,6 +1105,7 @@
                         isRecording = false;
                         voiceBtn.classList.remove('recording');
                         recordingStartTime = null;
+                        silenceStartTime = null; // 重置静音计时
                         
                         // 清理可視化和轉錄
                         if (visualizerEl) visualizerEl.classList.remove('active');
@@ -840,6 +1124,7 @@
                         isRecording = false;
                         voiceBtn.classList.remove('recording');
                         recordingStartTime = null;
+                        silenceStartTime = null; // 重置静音计时
                         
                         // 清理可視化和轉錄
                         if (visualizerEl) visualizerEl.classList.remove('active');
@@ -891,7 +1176,8 @@
                 isRecording = true;
                 recordingStartTime = Date.now(); // 記錄開始時間
                 voiceBtn.classList.add('recording');
-                setStatus('正在錄音...');
+                // 不在这里设置状态，让可视化组件自己显示"正在錄音..."
+                // setStatus('正在錄音...');
                 console.log('🎙️ 錄音中...');
             } catch (error) {
                 console.error('❌ 錄音錯誤:', error);
@@ -908,12 +1194,19 @@
                 if (transcriptEl) transcriptEl.classList.remove('active');
                 if (recognition) recognition.stop();
                 recordingStartTime = null;
+                silenceStartTime = null; // 重置静音计时
             }
         }
         
         // 使用實時轉錄的文字發送（作為語音輸入）
         async function sendTextAsVoice(text) {
             setStatus('正在處理...');
+            
+            // 先顯示用戶說的話（語音轉文字結果顯示在右側氣泡）
+            if (text && text.trim()) {
+                addMessage('user', text.trim(), true);
+                console.log('📝 用戶語音轉文字（實時轉錄）:', text.trim());
+            }
             
             try {
                 const response = await fetch('/api/chat', {
@@ -935,13 +1228,19 @@
                     }
                     
                     if (data.reply) {
-                        playTextAsSpeech(data.reply, data.emotion, messageElement);
+                        await playTextAsSpeech(data.reply, data.emotion, messageElement);
                     }
             } catch (error) {
                 console.error('Error:', error);
                 addMessage('assistant', '抱歉，我遇到了一些問題 😅');
+                isVoiceGenerating = false;
+                if (!isVoicePlaying) {
+                    setInputEnabled(true);
+                }
             } finally {
-                setStatus('');
+                if (!isVoicePlaying) {
+                    setStatus('');
+                }
             }
         }
 
@@ -964,6 +1263,13 @@
                 }
                 
                 console.log('⏹️  停止錄音...');
+                
+                // 立即隐藏可视化，避免重叠
+                if (visualizerEl) visualizerEl.classList.remove('active');
+                
+                // 重置静音计时
+                silenceStartTime = null;
+                
                 mediaRecorder.stop();
                 isRecording = false;
                 voiceBtn.classList.remove('recording');
@@ -996,7 +1302,27 @@
         }
 
         function setStatus(text) {
-            statusEl.textContent = text;
+            if (!text || text.trim() === '') {
+                statusEl.innerHTML = '';
+                statusEl.classList.remove('thinking');
+                return;
+            }
+            
+            // 如果是"正在思考"相关状态，显示动画
+            if (text.includes('正在思考') || text.includes('思考中') || text.includes('正在處理')) {
+                statusEl.innerHTML = `
+                    <div class="thinking-animation">
+                        <div class="thinking-ball"></div>
+                        <div class="thinking-ball"></div>
+                        <div class="thinking-ball"></div>
+                    </div>
+                `;
+                statusEl.classList.add('thinking');
+            } else {
+                // 其他状态显示文字
+                statusEl.textContent = text;
+                statusEl.classList.remove('thinking');
+            }
         }
 
         // 事件監聽

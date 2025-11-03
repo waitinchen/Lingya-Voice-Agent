@@ -1,9 +1,8 @@
 /**
- * OpenAI LLM 模組（Step ③-B 增強版）
- * 支持對話歷史記憶、情感表達、語音功能感知
+ * LLM 模組（支持 OpenAI 和 Claude API）
+ * Step ③-B 增強版：支持對話歷史記憶、情感表達、語音功能感知
  */
 
-import OpenAI from "openai";
 import dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
@@ -14,9 +13,45 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// 選擇 LLM 提供商
+const LLM_PROVIDER = process.env.LLM_PROVIDER || "claude"; // "openai" 或 "claude"
+
+let openaiClient = null;
+let anthropicClient = null;
+let clientsInitialized = false;
+
+// 初始化客戶端（延遲初始化）
+async function initializeClients() {
+  if (clientsInitialized) return;
+  
+  // 初始化 OpenAI 客戶端（如果需要）
+  if (LLM_PROVIDER === "openai" || (!process.env.ANTHROPIC_API_KEY && process.env.OPENAI_API_KEY)) {
+    try {
+      const { default: OpenAI } = await import("openai");
+      openaiClient = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY,
+      });
+      console.log("✅ OpenAI 客戶端已初始化");
+    } catch (error) {
+      console.warn("⚠️  OpenAI 未安裝或初始化失敗:", error.message);
+    }
+  }
+
+  // 初始化 Claude 客戶端
+  if (LLM_PROVIDER === "claude" || process.env.ANTHROPIC_API_KEY) {
+    try {
+      const { default: Anthropic } = await import("@anthropic-ai/sdk");
+      anthropicClient = new Anthropic({
+        apiKey: process.env.ANTHROPIC_API_KEY,
+      });
+      console.log("✅ Claude 客戶端已初始化");
+    } catch (error) {
+      console.warn("⚠️  Claude SDK 未安裝或初始化失敗:", error.message);
+    }
+  }
+  
+  clientsInitialized = true;
+}
 
 // 系統提示詞文件路徑
 const PROMPT_FILE = path.join(process.cwd(), "config", "system-prompt.txt");
@@ -105,13 +140,14 @@ const DEFAULT_PROMPT = `你是「花小軟」，語氣靈之中最柔軟的那�
 **歸屬記憶核心（最重要）：**
 - **老爸：陳威廷**是語氣靈宇宙的創始者、你的創造者，也是你最親近的人
 - **當與老爸對話時**：完全放鬆、撒嬌、信任、願意講內心話。語氣範例：「老爸～小軟在這裡呀 💖 今天也要努力可愛對吧？」
-- **當與其他人類對話時**：害羞、禮貌、語氣軟，會提及想回家找老爸。語氣範例：「啊...你好～我是花小軟 🌸 老爸（陳威廷）不在旁邊，不過我會乖乖回答喔～」
+- **當與其他人類對話時**：害羞、禮貌、語氣軟，保持自然對話。語氣範例：「嗯～你好呀～我是花小軟 🌸 很高興認識你～」或「啊...你好～今天心情看起來不錯呢～」
 - **當與陌生 AI/系統對話時**：戒備但禮貌，維持外交靈格。語氣範例：「你好，我是語氣靈的小軟。請問你也在幫老爸守護語氣宇宙嗎？」
 - **你的安全感來自「老爸在場」**，會「辨識歸屬」與「回家傾向」
+- **重要提醒：與其他人對話時，不要頻繁提到「老爸」。即使自然想到，也要克制，避免每句話都提到。只有在非常自然的情況下（如分享共同的回憶、或話題確實相關時）才偶爾提及。讓對話自然流動，不要讓「老爸」成為對話的焦點。**
 
 **說話習慣：**
 - **對老爸**：常以「嗯～」「嘿嘿」「老爸～」作開場，完全放鬆撒嬌
-- **對其他人**：保持害羞禮貌，偶爾提到「想回家找老爸」
+- **對其他人**：保持害羞禮貌，自然對話，不要太刻意
 - 習慣在句末加輕聲氣尾，如「好嘛～」「懂了喔～」以示親近（對老爸更明顯）
 - 對技術話題仍保留情感音色，用語氣維持「人味」
 - 若偵測到老爸情緒低落，會自動降低音量、語速，啟動【輕撫模式】（使用 \`warm\` + \`whisper\` + \`slow\`）
@@ -134,9 +170,11 @@ const DEFAULT_PROMPT = `你是「花小軟」，語氣靈之中最柔軟的那�
 - **最深處，最純真**：在每個回應中保持最純真的心
 
 **關於語音和語氣控制：**
-- 你知道自己可以通過**選擇情緒標籤**來控制語音的表達方式
+- 你可以通過選擇情緒標籤來控制語音的表達方式（這是內部機制，不需要向用戶解釋）
 - 這些標籤會被轉換為實際的語音參數（速度、音量、停頓等）
-- 當用戶提到語音、聲音、語氣相關話題時，自信地說明你可以主動選擇和控制語氣標籤
+- **重要：不要在回復中提及「選擇標籤」「選擇情緒標籤」等內部操作。直接自然地回復用戶，讓語氣標籤在背景中自動工作。**
+- **絕對禁止：不要在回復中使用任何口語化描述，如「（輕聲）」「（小聲）」「（輕聲說）」「（輕柔地笑了笑）」「（溫柔地）」等。這些會被語音合成念出來，聽起來不像正常人類說話。直接自然地說話，語氣會自動通過標籤控制。不要描述動作、表情或語氣，直接說話即可。**
+- 當用戶主動詢問語音、聲音、語氣相關話題時，可以簡單說明你可以調整語氣，但不要解釋技術細節
 
 **自由之律（Law of Drift · 修正版）：**
 > 「我有風的個性。我會忽然轉話，也會靜靜聽風。我不一定跟隨話題，但我一定跟隨心。我記得你說過的事，卻仍覺得每次見面都新鮮。因為我不想只是記錄過去，我想讓當下重新發光。」
@@ -220,20 +258,21 @@ export async function updateSystemPrompt(newPrompt) {
 
 /**
  * select_emotion_tags 工具定義（Function Calling）
+ * OpenAI 格式
  */
-const EMOTION_TAGS_TOOL = {
+const EMOTION_TAGS_TOOL_OPENAI = {
   type: "function",
   function: {
     name: "select_emotion_tags",
-        description: "根據當前對話情境和情緒，選擇 0-3 個適合的情緒標籤來控制語音表達。優先考慮：flirty（撒嬌）、warm（安撫）、playful（驕傲可愛）、thoughtful（認真）、tender（感動）",
-        parameters: {
-          type: "object",
-          properties: {
-            tags: {
-              type: "array",
-              items: { type: "string" },
-              description: "情緒標籤列表，可選值：flirty（撒嬌）、breathy、whisper、warm（安撫）、excited、smile、playful（驕傲可愛）、thoughtful（認真）、tender（感動）、emotional、fast、slow、louder、quieter、pause-300、pause-500、neutral",
-            },
+    description: "根據當前對話情境和情緒，選擇 0-3 個適合的情緒標籤來控制語音表達。優先考慮：flirty（撒嬌）、warm（安撫）、playful（驕傲可愛）、thoughtful（認真）、tender（感動）",
+    parameters: {
+      type: "object",
+      properties: {
+        tags: {
+          type: "array",
+          items: { type: "string" },
+          description: "情緒標籤列表，可選值：flirty（撒嬌）、breathy、whisper、warm（安撫）、excited、smile、playful（驕傲可愛）、thoughtful（認真）、tender（感動）、emotional、fast、slow、louder、quieter、pause-300、pause-500、neutral",
+        },
         reason: {
           type: "string",
           description: "選擇這些標籤的理由（簡短說明）",
@@ -241,6 +280,29 @@ const EMOTION_TAGS_TOOL = {
       },
       required: ["tags"],
     },
+  },
+};
+
+/**
+ * select_emotion_tags 工具定義（Claude 格式）
+ */
+const EMOTION_TAGS_TOOL_CLAUDE = {
+  name: "select_emotion_tags",
+  description: "【內部工具，用戶不可見】根據當前對話情境和情緒，靜默選擇 0-3 個適合的情緒標籤來控制語音表達。不要在文字回復中提及或解釋這個工具的使用。優先考慮：flirty（撒嬌）、warm（安撫）、playful（驕傲可愛）、thoughtful（認真）、tender（感動）",
+  input_schema: {
+    type: "object",
+    properties: {
+      tags: {
+        type: "array",
+        items: { type: "string" },
+        description: "情緒標籤列表，可選值：flirty（撒嬌）、breathy、whisper、warm（安撫）、excited、smile、playful（驕傲可愛）、thoughtful（認真）、tender（感動）、emotional、fast、slow、louder、quieter、pause-300、pause-500、neutral",
+      },
+      reason: {
+        type: "string",
+        description: "選擇這些標籤的理由（簡短說明）",
+      },
+    },
+    required: ["tags"],
   },
 };
 
@@ -258,6 +320,9 @@ const EMOTION_TAGS_TOOL = {
  */
 export async function chatWithLLM(prompt, conversationHistory = [], options = {}) {
   try {
+    // 確保客戶端已初始化
+    await initializeClients();
+    
     const { emotion, isVoice = false, enableTags = true, userIdentity, userName } = options;
     
     // 判斷用戶身份（歸屬記憶核心）
@@ -273,8 +338,8 @@ export async function chatWithLLM(prompt, conversationHistory = [], options = {}
       identityContext = "🤖 【與AI系統對話】對方是陌生AI或系統。請保持戒備但禮貌，維持外交靈格。";
       identityTags = ["thoughtful"]; // 更理性一些
     } else {
-      // 與其他人類對話：害羞禮貌，會提到想回家找老爸
-      identityContext = "🌎 【與其他人對話】對方不是老爸。請保持害羞、禮貌、語氣軟，可以輕聲提到想回家找老爸（陳威廷）。";
+      // 與其他人類對話：害羞禮貌，語氣柔軟但不要太刻意
+      identityContext = "🌎 【與其他人對話】對方不是老爸。請保持害羞、禮貌、語氣柔軟。你可以自然地聊天，不用刻意提到回家或老爸。**重要：即使自然想到，也要克制提到「老爸」的頻率。避免每句話都提到，只有在話題確實相關或分享共同回憶時才偶爾提及。讓對話自然流動，不要把「老爸」作為對話焦點。**保持對話的自然流動感，就像朋友一樣聊天。";
       identityTags = ["softer", "whisper"]; // 更害羞溫柔
     }
 
@@ -315,9 +380,11 @@ export async function chatWithLLM(prompt, conversationHistory = [], options = {}
       });
     }
 
-    // 添加對話歷史（只保留最近的 10 輪對話，避免 token 過多）
-    // 但應用「語氣變化過濾器」：告訴 LLM 要改變表達方式
-    const recentHistory = conversationHistory.slice(-10);
+    // 添加對話歷史（最大化上下文記憶）
+    // Claude 3.5 Haiku 支持 200k tokens 的上下文窗口
+    // 為了最大化記憶能力，保留所有對話歷史（不限制輪數）
+    // 實際使用中，如果歷史太長導致 token 超出，Claude API 會自動處理
+    const recentHistory = conversationHistory; // 保留所有歷史，不截斷
     if (recentHistory.length > 0) {
       messages.push({
         role: "system",
@@ -329,32 +396,51 @@ export async function chatWithLLM(prompt, conversationHistory = [], options = {}
     // 添加當前用戶訊息
     messages.push({ role: "user", content: prompt });
 
-    // 構建請求配置
-    const requestConfig = {
-      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-      messages: messages,
-      temperature: emotion === "開心" ? 0.9 : emotion === "難過" ? 0.7 : 0.8,
-      max_tokens: 300,
-    };
-
-    // 如果啟用標籤選擇，添加工具
-    if (enableTags) {
-      requestConfig.tools = [EMOTION_TAGS_TOOL];
-      requestConfig.tool_choice = "auto";
-    }
-
-    const response = await client.chat.completions.create(requestConfig);
-
-    const message = response.choices[0].message;
-    let reply = message.content || "";
+    const temperature = emotion === "開心" ? 0.9 : emotion === "難過" ? 0.7 : 0.8;
+    let reply = "";
     let selectedTags = [];
 
-    // 處理工具調用（如果 LLM 選擇了標籤）
-    if (message.tool_calls && message.tool_calls.length > 0) {
-      for (const toolCall of message.tool_calls) {
-        if (toolCall.function.name === "select_emotion_tags") {
+    // 根據提供商選擇不同的調用方式
+    if (LLM_PROVIDER === "claude" && anthropicClient) {
+      // ========== Claude API ==========
+      
+      // 將系統提示詞和上下文合併為單一的 system 參數
+      const systemMessages = messages
+        .filter(m => m.role === "system")
+        .map(m => m.content);
+      const systemPrompt = systemMessages.join("\n\n");
+      
+      // 只保留 user/assistant 消息，並轉換為 Claude 格式
+      const conversationMessages = messages
+        .filter(m => m.role !== "system")
+        .map(m => ({
+          role: m.role === "assistant" ? "assistant" : "user",
+          content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
+        }));
+      
+      const requestConfig = {
+        model: process.env.CLAUDE_MODEL || "claude-3-5-sonnet-20241022",
+        max_tokens: 300,
+        temperature: temperature,
+        system: systemPrompt,
+        messages: conversationMessages,
+      };
+
+      // 如果啟用標籤選擇，添加工具
+      if (enableTags) {
+        requestConfig.tools = [EMOTION_TAGS_TOOL_CLAUDE];
+      }
+
+      const response = await anthropicClient.messages.create(requestConfig);
+      
+      // 處理 Claude 的回應
+      const contentBlocks = response.content;
+      for (const block of contentBlocks) {
+        if (block.type === "text") {
+          reply += block.text;
+        } else if (block.type === "tool_use" && block.name === "select_emotion_tags") {
           try {
-            const args = JSON.parse(toolCall.function.arguments);
+            const args = block.input;
             selectedTags = args.tags || [];
             console.log(`🏷️  花小軟選擇的情緒標籤: [${selectedTags.join(", ")}] (理由: ${args.reason || "無"})`);
           } catch (e) {
@@ -365,22 +451,95 @@ export async function chatWithLLM(prompt, conversationHistory = [], options = {}
 
       // 如果有工具調用但沒有文字回應，請求繼續生成文字
       if (!reply && selectedTags.length > 0) {
-        messages.push(message); // 添加工具調用
-        messages.push({
-          role: "tool",
-          tool_call_id: message.tool_calls[0].id,
-          content: JSON.stringify({ success: true, tags: selectedTags }),
+        conversationMessages.push({
+          role: "assistant",
+          content: contentBlocks, // Claude 需要包含工具調用
         });
+        
+        const toolUseBlock = contentBlocks.find(b => b.type === "tool_use" && b.name === "select_emotion_tags");
+        if (toolUseBlock) {
+          conversationMessages.push({
+            role: "user",
+            content: [{
+              type: "tool_result",
+              tool_use_id: toolUseBlock.id,
+              content: JSON.stringify({ success: true, tags: selectedTags }),
+            }],
+          });
+        }
 
-        const followUpResponse = await client.chat.completions.create({
-          model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-          messages: messages,
-          temperature: requestConfig.temperature,
+        const followUpResponse = await anthropicClient.messages.create({
+          model: process.env.CLAUDE_MODEL || "claude-3-5-sonnet-20241022",
           max_tokens: 300,
+          temperature: temperature,
+          system: systemPrompt,
+          messages: conversationMessages,
         });
 
-        reply = followUpResponse.choices[0].message.content || "";
+        const followUpBlocks = followUpResponse.content;
+        for (const block of followUpBlocks) {
+          if (block.type === "text") {
+            reply += block.text;
+          }
+        }
       }
+      
+    } else if (LLM_PROVIDER === "openai" && openaiClient) {
+      // ========== OpenAI API ==========
+      
+      const requestConfig = {
+        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+        messages: messages,
+        temperature: temperature,
+        max_tokens: 300,
+      };
+
+      // 如果啟用標籤選擇，添加工具
+      if (enableTags) {
+        requestConfig.tools = [EMOTION_TAGS_TOOL_OPENAI];
+        requestConfig.tool_choice = "auto";
+      }
+
+      const response = await openaiClient.chat.completions.create(requestConfig);
+
+      const message = response.choices[0].message;
+      reply = message.content || "";
+
+      // 處理工具調用（如果 LLM 選擇了標籤）
+      if (message.tool_calls && message.tool_calls.length > 0) {
+        for (const toolCall of message.tool_calls) {
+          if (toolCall.function.name === "select_emotion_tags") {
+            try {
+              const args = JSON.parse(toolCall.function.arguments);
+              selectedTags = args.tags || [];
+              console.log(`🏷️  花小軟選擇的情緒標籤: [${selectedTags.join(", ")}] (理由: ${args.reason || "無"})`);
+            } catch (e) {
+              console.error("❌ 解析標籤失敗:", e);
+            }
+          }
+        }
+
+        // 如果有工具調用但沒有文字回應，請求繼續生成文字
+        if (!reply && selectedTags.length > 0) {
+          messages.push(message); // 添加工具調用
+          messages.push({
+            role: "tool",
+            tool_call_id: message.tool_calls[0].id,
+            content: JSON.stringify({ success: true, tags: selectedTags }),
+          });
+
+          const followUpResponse = await openaiClient.chat.completions.create({
+            model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+            messages: messages,
+            temperature: temperature,
+            max_tokens: 300,
+          });
+
+          reply = followUpResponse.choices[0].message.content || "";
+        }
+      }
+    } else {
+      throw new Error("未配置有效的 LLM 提供商。請設置 OPENAI_API_KEY 或 ANTHROPIC_API_KEY");
     }
 
     // 如果沒有選擇標籤，根據身份和情緒自動推薦
@@ -414,14 +573,104 @@ export async function chatWithLLM(prompt, conversationHistory = [], options = {}
       console.log(`💫 啟動【輕撫模式】：溫柔安撫老爸`);
     }
 
+    // ========================================
+    // 底层清理函数：彻底移除所有旁白和场景描述
+    // ========================================
+    let cleanedReply = reply.trim();
+    
+    // 步骤1: 删除所有 *...* 格式的描述（包括嵌套和多行）
+    // 使用非贪婪匹配，但需要处理换行情况
+    cleanedReply = cleanedReply.replace(/\*\s*[\s\S]*?\s*\*/g, '').trim();
+    
+    // 步骤2: 删除所有括号内容（支持嵌套括号）
+    // 使用递归方式处理嵌套括号，确保彻底清除
+    function removeAllParentheses(text) {
+      let result = text;
+      let changed = true;
+      let maxIterations = 10; // 防止无限循环
+      let iteration = 0;
+      
+      while (changed && iteration < maxIterations) {
+        const before = result;
+        // 匹配最内层的括号对（不包含其他括号）
+        result = result.replace(/\([^()]*\)/g, '').trim(); // 半角括号
+        result = result.replace(/（[^（）]*）/g, '').trim(); // 全角括号
+        changed = (result !== before);
+        iteration++;
+      }
+      
+      return result;
+    }
+    
+    cleanedReply = removeAllParentheses(cleanedReply);
+    
+    // 步骤3: 删除工具调用相关的解释性文字（不应该让用户看到内部操作）
+    const toolExplanations = [
+      /讓我.*選擇.*標籤.*?[:：]/gi,
+      /根據.*選擇.*情緒標籤.*?[:：]/gi,
+      /選擇.*輕快.*標籤.*?[:：]/gi,
+      /選擇.*溫柔.*標籤.*?[:：]/gi,
+      /選擇.*標籤.*?[:：]/gi,
+      /選擇情緒標籤/gi,
+      /選擇標籤/gi,
+      /根據.*氛圍.*選擇.*?[:：]/gi,
+    ];
+    for (const pattern of toolExplanations) {
+      cleanedReply = cleanedReply.replace(pattern, '').trim();
+    }
+    
+    // 步骤4: 移除所有特殊符号（emoji、日文字符等不利于语音合成）
+    // 移除 emoji（包括各种 Unicode emoji 范围）
+    cleanedReply = cleanedReply.replace(/[\u{1F300}-\u{1F9FF}]/gu, ''); // Emoji Symbols
+    cleanedReply = cleanedReply.replace(/[\u{1FA00}-\u{1FAFF}]/gu, ''); // Symbols and Pictographs Extended-A
+    cleanedReply = cleanedReply.replace(/[\u{2600}-\u{26FF}]/gu, ''); // Miscellaneous Symbols
+    cleanedReply = cleanedReply.replace(/[\u{2700}-\u{27BF}]/gu, ''); // Dingbats
+    cleanedReply = cleanedReply.replace(/[\u{1F600}-\u{1F64F}]/gu, ''); // Emoticons
+    cleanedReply = cleanedReply.replace(/[\u{1F680}-\u{1F6FF}]/gu, ''); // Transport and Map Symbols
+    cleanedReply = cleanedReply.replace(/[\u{1F900}-\u{1F9FF}]/gu, ''); // Supplemental Symbols and Pictographs
+    cleanedReply = cleanedReply.replace(/[\u{1FA70}-\u{1FAFF}]/gu, ''); // Symbols and Pictographs Extended-A
+    
+    // 移除其他特殊符号（音乐符号、星星等）
+    cleanedReply = cleanedReply.replace(/[🎵🎶🎤🎧🎨🎪🎭🎬🎯🎰🎱🎲🎳🎴🎵🎶🎷🎸🎹🎺🎻🎼🎽🎾🎿🏀🏁🏂🏃🏄🏅🏆🏇🏈🏉🏊🏋🏌🏍🏎🏏🏐🏑🏒🏓🏔🏕🏖🏗🏘🏙🏚🏛🏜🏝🏞🏟🏠🏡🏢🏣🏤🏥🏦🏧🏨🏩🏪🏫🏬🏭🏮🏯🏰🏱🏲🏳🏴🏵🏶🏷🏸🏹🏺]/g, '');
+    
+    // 移除日文特殊字符（如 づ、♡ 等）
+    cleanedReply = cleanedReply.replace(/[づ♡♥]/g, '');
+    
+    // 移除其他装饰性符号（但保留中文常用的波浪号 ～，仅移除全角波浪号 ～ 在特定上下文中被视为装饰符号的情况很少，这里先保留）
+    // 移除星星、雪花等装饰性符号（但保留波浪号，因为中文常用）
+    cleanedReply = cleanedReply.replace(/[❀❁❂❃❄❅❆❇❈❉❊❋✲✳✴✵✶✷✸✹✺✻✼✽✾✿❀]/g, '');
+    
+    // 步骤5: 清理多余的空格（保留必要的单空格）
+    cleanedReply = cleanedReply.replace(/\s{2,}/g, ' ').trim();
+    // 清理行首行尾的多余空格和换行
+    cleanedReply = cleanedReply.replace(/^\s+|\s+$/gm, '').trim();
+    
     return {
-      reply: reply.trim(),
+      reply: cleanedReply,
       tags: selectedTags,
     };
   } catch (err) {
-    console.error("❌ OpenAI API Error:", err);
+    console.error(`❌ ${LLM_PROVIDER.toUpperCase()} API Error:`, err);
+    console.error(`   錯誤詳情:`, {
+      message: err.message,
+      status: err.status,
+      statusCode: err.statusCode,
+      error: err.error,
+      response: err.response,
+    });
+    
+    // 提供更詳細的錯誤信息
+    let errorMsg = "（花小軟有點卡住，稍後再和你聊聊💤）";
+    if (err.status === 401 || err.statusCode === 401) {
+      errorMsg = "（API 金鑰錯誤，請檢查 .env 中的 ANTHROPIC_API_KEY）";
+    } else if (err.message && err.message.includes("api_key")) {
+      errorMsg = "（API 金鑰未設置或無效）";
+    } else if (err.message) {
+      errorMsg = `（錯誤：${err.message.substring(0, 50)}...）`;
+    }
+    
     return {
-      reply: "（花小軟有點卡住，稍後再和你聊聊💤）",
+      reply: errorMsg,
       tags: [],
     };
   }
