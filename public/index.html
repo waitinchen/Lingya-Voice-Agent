@@ -19,6 +19,8 @@
             justify-content: center;
             align-items: center;
             padding: 20px;
+            margin: 0;
+            overflow: hidden;
         }
 
         .chat-container {
@@ -31,25 +33,36 @@
             flex-direction: column;
             height: 90vh;
             max-height: 700px;
+            position: relative;
+            overflow: hidden;
         }
 
         /* 手機版響應式設計 */
         @media (max-width: 768px) {
             body {
-                padding: 5px;
+                padding: 0;
                 align-items: flex-start;
+                justify-content: flex-start;
+                height: 100vh;
+                height: 100dvh; /* 使用动态视口高度，支持移动端 */
+                overflow: hidden;
             }
 
             .chat-container {
-                height: calc(100vh - 10px); /* 100vh - 上下各5px */
+                height: 100vh;
+                height: 100dvh; /* 使用动态视口高度 */
                 max-height: none;
-                border-radius: 15px;
-                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+                border-radius: 0;
+                box-shadow: none;
+                width: 100%;
+                max-width: 100%;
             }
 
             .chat-header {
                 padding: 15px;
-                border-radius: 15px 15px 0 0;
+                padding-top: max(15px, env(safe-area-inset-top)); /* 支持安全区域（顶部） */
+                border-radius: 0;
+                flex-shrink: 0;
             }
 
             .chat-header h1 {
@@ -58,11 +71,20 @@
 
             .chat-messages {
                 padding: 15px;
+                flex: 1;
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+                padding-bottom: 10px;
             }
 
             .chat-input {
-                padding: 15px;
-                padding-bottom: max(15px, env(safe-area-inset-bottom)); /* 支持安全区域 */
+                padding: 12px 15px;
+                padding-bottom: max(12px, env(safe-area-inset-bottom)); /* 支持安全区域（底部） */
+                border-top: 1px solid #eee;
+                flex-shrink: 0;
+                background: white;
+                position: relative;
+                z-index: 10;
             }
             
             /* 手機版輸入框改善：避免被鍵盤擋住 */
@@ -70,27 +92,31 @@
                 position: relative;
                 z-index: 10;
             }
-            
-            .chat-messages {
-                padding-bottom: 80px; /* 為輸入框預留空間 */
-            }
         }
 
         /* 超小屏幕（小於 480px）*/
         @media (max-width: 480px) {
             body {
-                padding: 5px;
+                padding: 0;
+                height: 100vh;
+                height: 100dvh;
+                overflow: hidden;
             }
 
             .chat-container {
-                height: calc(100vh - 10px);
-                border-radius: 10px;
+                height: 100vh;
+                height: 100dvh;
+                border-radius: 0;
                 max-height: 100vh;
+                width: 100%;
+                max-width: 100%;
             }
 
             .chat-header {
-                padding: 12px;
-                border-radius: 10px 10px 0 0;
+                padding: 12px 15px;
+                padding-top: max(12px, env(safe-area-inset-top));
+                border-radius: 0;
+                flex-shrink: 0;
             }
 
             .chat-header h1 {
@@ -98,9 +124,12 @@
             }
 
             .chat-messages {
-                padding: 12px;
-                padding-bottom: 80px; /* 為輸入框預留空間 */
+                padding: 12px 15px;
+                padding-bottom: 10px;
                 gap: 12px;
+                flex: 1;
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
             }
 
             .message-content {
@@ -110,13 +139,14 @@
             }
 
             .chat-input {
-                padding: 12px;
-                padding-bottom: max(12px, env(safe-area-inset-bottom)); /* 支持安全区域 */
-                position: sticky;
-                bottom: 0;
+                padding: 10px 15px;
+                padding-bottom: max(10px, env(safe-area-inset-bottom));
+                position: relative;
+                bottom: auto;
                 background: white;
                 border-top: 1px solid #eee;
                 z-index: 100;
+                flex-shrink: 0;
             }
             
             /* 輸入框組改善 */
@@ -137,6 +167,7 @@
             padding: 20px;
             border-radius: 20px 20px 0 0;
             text-align: center;
+            flex-shrink: 0; /* 防止头部被压缩 */
         }
 
         .chat-header h1 {
@@ -156,6 +187,7 @@
             display: flex;
             flex-direction: column;
             gap: 15px;
+            -webkit-overflow-scrolling: touch; /* iOS 平滑滚动 */
         }
 
         .message {
@@ -762,8 +794,21 @@
                 }
                 
                 // 生成並播放語音（帶情緒控制），並添加到消息中
-                if (data.reply) {
-                    await playTextAsSpeech(data.reply, data.emotion, messageElement);
+                if (data.reply && data.reply.trim()) {
+                    try {
+                        await playTextAsSpeech(data.reply, data.emotion, messageElement);
+                    } catch (audioError) {
+                        console.error('❌ 語音播放錯誤:', audioError);
+                        // 即使語音播放失敗，也不影響對話流程
+                        isVoiceGenerating = false;
+                        if (!isVoicePlaying) {
+                            setInputEnabled(true);
+                        }
+                    }
+                } else {
+                    // 沒有回復文字，直接啟用輸入
+                    isVoiceGenerating = false;
+                    setInputEnabled(true);
                 }
             } catch (error) {
                 // 如果出错，也要移除思考消息
@@ -1076,8 +1121,12 @@
                     
                     // 開始播放（添加錯誤處理以應對自動播放限制）
                     try {
-                        await audio.play();
-                        console.log('🔊 開始播放語音');
+                        // 嘗試自動播放
+                        const playPromise = audio.play();
+                        if (playPromise !== undefined) {
+                            await playPromise;
+                            console.log('🔊 開始播放語音（自動播放成功）');
+                        }
                     } catch (playError) {
                         console.warn('⚠️ 自動播放被阻止，需要用戶交互:', playError);
                         // 如果自動播放失敗，顯示播放器讓用戶手動播放
@@ -1086,15 +1135,23 @@
                             if (audioPlayer) {
                                 audioPlayer.style.display = 'block';
                                 setStatus('請點擊播放按鈕收聽語音');
+                                // 添加點擊播放的事件監聽器（用戶點擊後可以播放）
+                                audioPlayer.addEventListener('play', () => {
+                                    console.log('✅ 用戶手動播放語音');
+                                    isVoicePlaying = true;
+                                    isVoiceGenerating = true;
+                                    setInputEnabled(false);
+                                }, { once: true });
                             }
                         }
-                        // 重置狀態
+                        // 重置狀態（但保持音頻對象，等待用戶點擊）
+                        // 不要完全重置，讓用戶可以點擊播放
                         isVoicePlaying = false;
                         isVoiceGenerating = false;
-                        currentAudio = null;
+                        // 不設置 currentAudio = null，保留引用以便後續播放
                         setInputEnabled(true);
                         // 3秒後清除提示
-                        setTimeout(() => setStatus(''), 3000);
+                        setTimeout(() => setStatus(''), 5000);
                     }
                 } else {
                     console.error('❌ TTS 響應失敗:', response.status, response.statusText);
