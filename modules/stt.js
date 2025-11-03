@@ -14,9 +14,20 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// 延遲初始化 OpenAI 客戶端（確保環境變數已載入）
+let openaiClient = null;
+
+function getOpenAIClient() {
+  if (!openaiClient) {
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY environment variable is missing or empty");
+    }
+    openaiClient = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+  }
+  return openaiClient;
+}
 
 /**
  * 將音頻轉換為文字
@@ -64,6 +75,7 @@ export async function transcribeAudio(audioData, options = {}) {
 
     // 使用 OpenAI Whisper API
     // 注意：Whisper API 要求音頻至少 0.1 秒
+    const openai = getOpenAIClient();
     let transcription;
     try {
       transcription = await openai.audio.transcriptions.create({
