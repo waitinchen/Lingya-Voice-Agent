@@ -1388,48 +1388,102 @@
                 } else {
                     console.error('❌ TTS 響應失敗:', response.status, response.statusText);
                     let errorText = '';
+                    let errorJson = null;
                     try {
                         errorText = await response.text();
                         console.error('錯誤詳情:', errorText);
+                        // 嘗試解析 JSON 錯誤信息
+                        try {
+                            errorJson = JSON.parse(errorText);
+                        } catch (e) {
+                            // 不是 JSON，忽略
+                        }
                     } catch (e) {
                         console.error('無法讀取錯誤詳情');
                     }
                     
-                    // 顯示錯誤信息給用戶
+                    // 顯示友好的錯誤信息給用戶（不影響對話）
                     if (messageElement) {
-                        const errorMsg = `❌ 語音生成失敗 (${response.status})`;
+                        const errorHint = errorJson?.hint || '語音服務暫時不可用';
                         const errorDiv = document.createElement('div');
-                        errorDiv.style.cssText = 'color: #ff5fa2; font-size: 0.85rem; margin-top: 8px; padding: 8px; background: rgba(255, 95, 162, 0.1); border-radius: 8px;';
-                        errorDiv.textContent = errorMsg;
+                        errorDiv.className = 'tts-error-message';
+                        errorDiv.style.cssText = 'color: #ff5fa2; font-size: 0.8rem; margin-top: 8px; padding: 8px 12px; background: rgba(255, 95, 162, 0.08); border-radius: 8px; border-left: 3px solid #ff5fa2; display: flex; align-items: center; gap: 8px;';
+                        
+                        const icon = document.createElement('span');
+                        icon.textContent = '🔇';
+                        icon.style.fontSize = '1rem';
+                        
+                        const text = document.createElement('span');
+                        text.textContent = `語音暫時無法播放（${errorHint}），但文字消息已收到 ✓`;
+                        
+                        const retryBtn = document.createElement('button');
+                        retryBtn.textContent = '重試';
+                        retryBtn.style.cssText = 'margin-left: auto; padding: 4px 12px; background: #ff5fa2; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.75rem; font-weight: 500;';
+                        retryBtn.onclick = () => {
+                            errorDiv.remove();
+                            playTextAsSpeech(text, null, messageElement).catch(err => {
+                                console.error('重試失敗:', err);
+                            });
+                        };
+                        
+                        errorDiv.appendChild(icon);
+                        errorDiv.appendChild(text);
+                        errorDiv.appendChild(retryBtn);
                         
                         const messageContent = messageElement.querySelector('.message-content');
                         if (messageContent) {
+                            // 移除舊的錯誤信息（如果有）
+                            const oldError = messageContent.querySelector('.tts-error-message');
+                            if (oldError) oldError.remove();
                             messageContent.appendChild(errorDiv);
                         }
                     }
                     
-                    setStatus('語音生成失敗，請稍後再試');
-                    setTimeout(() => setStatus(''), 5000);
+                    setStatus('語音生成失敗，但文字消息已收到');
+                    setTimeout(() => setStatus(''), 3000);
                 }
             } catch (error) {
                 console.error('❌ TTS Error:', error);
                 console.error('錯誤堆疊:', error.stack);
                 
-                // 顯示錯誤信息給用戶
+                // 顯示友好的錯誤信息給用戶（不影響對話）
                 if (messageElement) {
-                    const errorMsg = `❌ 語音生成錯誤: ${error.message || '未知錯誤'}`;
                     const errorDiv = document.createElement('div');
-                    errorDiv.style.cssText = 'color: #ff5fa2; font-size: 0.85rem; margin-top: 8px; padding: 8px; background: rgba(255, 95, 162, 0.1); border-radius: 8px;';
-                    errorDiv.textContent = errorMsg;
+                    errorDiv.className = 'tts-error-message';
+                    errorDiv.style.cssText = 'color: #ff5fa2; font-size: 0.8rem; margin-top: 8px; padding: 8px 12px; background: rgba(255, 95, 162, 0.08); border-radius: 8px; border-left: 3px solid #ff5fa2; display: flex; align-items: center; gap: 8px;';
+                    
+                    const icon = document.createElement('span');
+                    icon.textContent = '🔇';
+                    icon.style.fontSize = '1rem';
+                    
+                    const text = document.createElement('span');
+                    text.textContent = `語音暫時無法播放，但文字消息已收到 ✓`;
+                    
+                    const retryBtn = document.createElement('button');
+                    retryBtn.textContent = '重試';
+                    retryBtn.style.cssText = 'margin-left: auto; padding: 4px 12px; background: #ff5fa2; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.75rem; font-weight: 500;';
+                    retryBtn.onclick = () => {
+                        errorDiv.remove();
+                        playTextAsSpeech(text, null, messageElement).catch(err => {
+                            console.error('重試失敗:', err);
+                        });
+                    };
+                    
+                    errorDiv.appendChild(icon);
+                    errorDiv.appendChild(text);
+                    errorDiv.appendChild(retryBtn);
                     
                     const messageContent = messageElement.querySelector('.message-content');
                     if (messageContent) {
+                        // 移除舊的錯誤信息（如果有）
+                        const oldError = messageContent.querySelector('.tts-error-message');
+                        if (oldError) oldError.remove();
                         messageContent.appendChild(errorDiv);
                     }
                 }
                 
-                setStatus('語音生成失敗：' + (error.message || '未知錯誤'));
-                setTimeout(() => setStatus(''), 5000);
+                setStatus('語音生成失敗，但文字消息已收到');
+                setTimeout(() => setStatus(''), 3000);
                 isVoiceGenerating = false;
                 isVoicePlaying = false;
                 currentAudio = null;
