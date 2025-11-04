@@ -102,21 +102,33 @@ export function getToneTag(emotionTags = []) {
  * @returns {string} VoiceID
  */
 function selectVoiceByTags(tags = []) {
+  // 優先使用環境變數中的 VoiceID（如果設置了）
+  // 因為 VOICE_MAP 中的 VoiceID 可能在某些環境中不可用
+  const envVoiceId = process.env.CARTESIA_VOICE_ID;
+  
   if (!tags || tags.length === 0) {
-    return process.env.CARTESIA_VOICE_ID || DEFAULT_VOICE;
+    return envVoiceId || DEFAULT_VOICE;
   }
 
+  // 如果環境變數有設置，優先使用環境變數（更可靠）
+  if (envVoiceId) {
+    console.log(`   💡 使用環境變數中的 VoiceID: ${envVoiceId.substring(0, 8)}...`);
+    return envVoiceId;
+  }
+
+  // 否則嘗試使用 VOICE_MAP 中的 VoiceID
   // 優先順序：warm > whisper > playful > excited > neutral
   const priorityOrder = ['warm', 'whisper', 'playful', 'excited', 'neutral'];
   
   for (const priorityTag of priorityOrder) {
     if (tags.includes(priorityTag) && VOICE_MAP[priorityTag]) {
+      console.log(`   💡 使用 VOICE_MAP 中的 VoiceID (${priorityTag}): ${VOICE_MAP[priorityTag]}`);
       return VOICE_MAP[priorityTag];
     }
   }
 
-  // 如果沒有匹配的，使用環境變數或默認
-  return process.env.CARTESIA_VOICE_ID || DEFAULT_VOICE;
+  // 如果沒有匹配的，使用默認
+  return DEFAULT_VOICE;
 }
 
 /**
@@ -358,12 +370,33 @@ export async function synthesizeSpeechCartesiaToBuffer(text, options = {}) {
       if (apiError.status) {
         console.error("   HTTP 狀態:", apiError.status);
       }
+      if (apiError.statusCode) {
+        console.error("   HTTP 狀態碼:", apiError.statusCode);
+      }
       if (apiError.response) {
-        console.error("   API 響應:", JSON.stringify(apiError.response, null, 2));
+        try {
+          console.error("   API 響應:", JSON.stringify(apiError.response, null, 2));
+        } catch (e) {
+          console.error("   API 響應:", apiError.response);
+        }
+      }
+      if (apiError.body) {
+        try {
+          console.error("   API Body:", JSON.stringify(apiError.body, null, 2));
+        } catch (e) {
+          console.error("   API Body:", apiError.body);
+        }
       }
       if (apiError.stack) {
         console.error("   錯誤堆疊:", apiError.stack);
       }
+      
+      // 如果錯誤與 VoiceID 相關，提供更詳細的提示
+      const errorMsg = apiError.message || String(apiError);
+      if (errorMsg.includes("voice") || errorMsg.includes("Voice") || errorMsg.includes("404") || errorMsg.includes("not found")) {
+        console.error("   💡 提示: 可能是 VoiceID 無效，嘗試使用環境變數 CARTESIA_VOICE_ID");
+      }
+      
       throw apiError;
     }
 
