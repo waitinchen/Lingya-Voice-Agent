@@ -160,3 +160,5 @@ curl -X POST http://localhost:3000/api/text \
 - 整合 n8n 進行自動化調整
 - 優化語音流處理性能
 
+
+

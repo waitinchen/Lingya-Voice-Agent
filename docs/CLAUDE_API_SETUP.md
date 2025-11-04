@@ -98,3 +98,5 @@ OPENAI_API_KEY=your_key_here
 
 **花小軟現在支持 Claude 了！** 🎉🌸
 
+
+

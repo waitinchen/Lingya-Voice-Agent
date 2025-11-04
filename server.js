@@ -126,11 +126,16 @@ app.post("/api/chat", async (req, res) => {
       { role: "assistant", content: llmResult.reply },
     ];
 
+    // 獲取 toneTag 信息
+    const { getToneTag } = await import("./modules/tts-cartesia.js");
+    const toneTag = getToneTag(llmResult.tags || []);
+
     res.json({
       reply: llmResult.reply,
       tags: llmResult.tags || [], // Step ③-B: 返回選擇的標籤
       emotion: detectedEmotion,
       history: updatedHistory,
+      toneTag: toneTag, // 🎭 語氣圖案標籤
     });
   } catch (error) {
     console.error("❌ 處理請求失敗:", error);
@@ -164,24 +169,40 @@ app.post("/api/speak", async (req, res) => {
         }
       }
       
-      // 使用 LLM 選擇語氣標籤（不生成完整回復，只選擇標籤）
-      const { chatWithLLM } = await import("./modules/llm.js");
-      const llmResult = await chatWithLLM(
-        `請為以下文字選擇 0-3 個適合的語氣標籤（只需選擇標籤，不需要生成回復）：\n\n"${text}"`,
-        [],
-        {
-          enableTags: true,
+      // 優先使用快速關鍵詞推理（emotion-tags.js）
+      // 如果失敗，再使用 LLM 進行更精確的推理
+      try {
+        const { inferEmotionTags } = await import("./modules/emotion-tags.js");
+        const inferredTags = inferEmotionTags(text, {
           userIdentity: detectedIdentity,
-          userName: userName,
-          skipReply: false, // 仍然需要生成回復，但會提取標籤
+        });
+        
+        if (inferredTags && inferredTags.length > 0) {
+          finalTags = inferredTags;
+          console.log(`✅ 關鍵詞推理標籤: [${finalTags.join(", ")}]`);
+        } else {
+          // 如果關鍵詞推理沒有結果，使用 LLM 進行更精確的推理
+          const { chatWithLLM } = await import("./modules/llm.js");
+          const llmResult = await chatWithLLM(
+            `請為以下文字選擇 0-3 個適合的語氣標籤（只需選擇標籤，不需要生成回復）：\n\n"${text}"`,
+            [],
+            {
+              enableTags: true,
+              userIdentity: detectedIdentity,
+              userName: userName,
+            }
+          );
+          
+          if (llmResult.tags && llmResult.tags.length > 0) {
+            finalTags = llmResult.tags;
+            console.log(`✅ LLM 自動選擇標籤: [${finalTags.join(", ")}]`);
+          } else {
+            console.log("💡 未選擇標籤，使用默認");
+          }
         }
-      );
-      
-      if (llmResult.tags && llmResult.tags.length > 0) {
-        finalTags = llmResult.tags;
-        console.log(`✅ LLM 自動選擇標籤: [${finalTags.join(", ")}]`);
-      } else {
-        console.log("💡 LLM 未選擇標籤，使用默認");
+      } catch (error) {
+        console.error("❌ 語氣推理失敗:", error);
+        console.log("💡 使用默認標籤");
       }
     }
 
@@ -194,6 +215,15 @@ app.post("/api/speak", async (req, res) => {
     if (!filePath) {
       return res.status(500).json({ error: "TTS failed" });
     }
+
+    // 獲取 toneTag 信息
+    const { getToneTag } = await import("./modules/tts-cartesia.js");
+    const toneTag = getToneTag(finalTags);
+
+    // 設置 toneTag 相關 Header（供前端使用）
+    res.setHeader("X-Tone-Tag-Emoji", toneTag.emoji);
+    res.setHeader("X-Tone-Tag-Label", toneTag.label);
+    res.setHeader("X-Tags", finalTags.join(","));
 
     // 返回音檔（WAV 格式）
     res.sendFile(filePath, { root: process.cwd() }, (err) => {
@@ -219,9 +249,24 @@ app.post("/api/speak-stream", async (req, res) => {
 
     // Step ③-B 增強：支持情緒標籤控制語音語氣
     let audioBuffer;
+    let finalTags = tags || [];
+    
+    // 如果沒有標籤但有 emotion，轉換為標籤
+    if (finalTags.length === 0 && emotion) {
+      const emotionToTag = {
+        '開心': ['excited', 'smile'],
+        '難過': ['softer', 'breathy'],
+        '生氣': ['angry', 'louder'],
+        '平靜': ['neutral'],
+      };
+      if (emotionToTag[emotion]) {
+        finalTags = emotionToTag[emotion];
+      }
+    }
+    
     try {
       audioBuffer = await synthesizeSpeechCartesiaToBuffer(text, {
-        tags, // 優先使用標籤
+        tags: finalTags, // 優先使用標籤
         emotion, // 向後兼容
         tone,
       });
@@ -240,9 +285,16 @@ app.post("/api/speak-stream", async (req, res) => {
       return res.status(500).json({ error: "TTS returned empty audio buffer" });
     }
 
+    // 獲取 toneTag 信息
+    const { getToneTag } = await import("./modules/tts-cartesia.js");
+    const toneTag = getToneTag(finalTags);
+
     // 設置正確的 Content-Type（WAV 格式）
     res.setHeader("Content-Type", "audio/wav");
     res.setHeader("Content-Length", audioBuffer.length);
+    res.setHeader("X-Tags", finalTags.join(",")); // 方便前端知道使用了哪些標籤
+    res.setHeader("X-Tone-Tag-Emoji", toneTag.emoji); // 語氣圖標
+    res.setHeader("X-Tone-Tag-Label", toneTag.label); // 語氣標籤
     res.send(audioBuffer);
   } catch (error) {
     console.error("❌ TTS 處理失敗:", error);
@@ -468,10 +520,16 @@ app.post("/api/preview", async (req, res) => {
       return res.status(500).json({ error: "TTS failed" });
     }
 
+    // 獲取 toneTag 信息
+    const { getToneTag } = await import("./modules/tts-cartesia.js");
+    const toneTag = getToneTag(tags);
+
     // 設置正確的 Content-Type（WAV 格式）
     res.setHeader("Content-Type", "audio/wav");
     res.setHeader("Content-Length", audioBuffer.length);
     res.setHeader("X-Tags", tags.join(",")); // 方便前端知道使用了哪些標籤
+    res.setHeader("X-Tone-Tag-Emoji", toneTag.emoji); // 語氣圖標
+    res.setHeader("X-Tone-Tag-Label", toneTag.label); // 語氣標籤
     res.send(audioBuffer);
   } catch (error) {
     console.error("❌ 語氣預覽失敗:", error);

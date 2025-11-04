@@ -107,3 +107,5 @@ Invoke-WebRequest -Uri http://localhost:3000/api/chat -Method POST -ContentType 
 3. **模組化設計**：`modules/llm.js` 可獨立替換為其他 LLM Provider
 4. **後續擴展**：可接入 EmotionTags 中介層進行語氣強化
 
+
+

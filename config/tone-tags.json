@@ -1,0 +1,55 @@
+{
+  "warm": {
+    "emoji": "💞",
+    "label": "溫柔"
+  },
+  "whisper": {
+    "emoji": "🌙",
+    "label": "輕語"
+  },
+  "playful": {
+    "emoji": "🎀",
+    "label": "俏皮"
+  },
+  "excited": {
+    "emoji": "✨",
+    "label": "興奮"
+  },
+  "neutral": {
+    "emoji": "🌸",
+    "label": "平靜"
+  },
+  "flirty": {
+    "emoji": "💕",
+    "label": "撒嬌"
+  },
+  "breathy": {
+    "emoji": "💨",
+    "label": "輕柔"
+  },
+  "angry": {
+    "emoji": "😤",
+    "label": "生氣"
+  },
+  "tender": {
+    "emoji": "💖",
+    "label": "溫柔"
+  },
+  "smile": {
+    "emoji": "😊",
+    "label": "微笑"
+  },
+  "thoughtful": {
+    "emoji": "🤔",
+    "label": "思考"
+  },
+  "emotional": {
+    "emoji": "💝",
+    "label": "感動"
+  },
+  "softer": {
+    "emoji": "💫",
+    "label": "更溫柔"
+  }
+}
+

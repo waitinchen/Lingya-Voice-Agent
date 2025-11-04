@@ -163,3 +163,5 @@ Invoke-WebRequest -Uri http://localhost:3000/api/speak-openai -Method POST -Cont
 
 所有代碼已就緒，一旦 API 連接成功即可使用！🎙️
 
+
+

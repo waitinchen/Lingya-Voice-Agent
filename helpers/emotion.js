@@ -78,28 +78,52 @@ export function applyEmotion({ text, tags = [] }) {
   speed = Math.max(0.8, Math.min(1.3, 1 + speed)); // 最終倍數 0.8-1.3
   volume = Math.max(0.8, Math.min(1.2, 1 + volume)); // 最終倍數 0.8-1.2
 
-  // 4) 清理特殊符号（不利于语音合成）
-  let script = text;
+  // 4) 严格清理特殊符号（只保留语音友好的字符）
+  // 使用与 llm.js 相同的白名单方法
+  function keepOnlySpeechFriendlyChars(text) {
+    let result = '';
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      const code = char.charCodeAt(0);
+      
+      // 中文字符（CJK统一汉字）
+      if (code >= 0x4e00 && code <= 0x9fff) {
+        result += char;
+        continue;
+      }
+      
+      // 英文字母（大小写）
+      if ((code >= 0x41 && code <= 0x5a) || (code >= 0x61 && code <= 0x7a)) {
+        result += char;
+        continue;
+      }
+      
+      // 数字
+      if (code >= 0x30 && code <= 0x39) {
+        result += char;
+        continue;
+      }
+      
+      // 基本标点（语音友好）
+      const allowedPunctuation = [
+        '，', '。', '！', '？', '～', '、', '：', '；',  // 中文标点
+        ',', '.', '!', '?', ':', ';',  // 英文标点
+        '"', '"', ''', ''',  // 引号（全角半角）
+        '（', '）', '(', ')',  // 括号
+        '《', '》',  // 书名号
+        ' ', '\n', '\r', '\t',  // 空白字符
+      ];
+      if (allowedPunctuation.includes(char)) {
+        result += char;
+        continue;
+      }
+      
+      // 其他所有字符都过滤掉
+    }
+    return result;
+  }
   
-  // 移除 emoji（包括各种 Unicode emoji 范围）
-  script = script.replace(/[\u{1F300}-\u{1F9FF}]/gu, ''); // Emoji Symbols
-  script = script.replace(/[\u{1FA00}-\u{1FAFF}]/gu, ''); // Symbols and Pictographs Extended-A
-  script = script.replace(/[\u{2600}-\u{26FF}]/gu, ''); // Miscellaneous Symbols
-  script = script.replace(/[\u{2700}-\u{27BF}]/gu, ''); // Dingbats
-  script = script.replace(/[\u{1F600}-\u{1F64F}]/gu, ''); // Emoticons
-  script = script.replace(/[\u{1F680}-\u{1F6FF}]/gu, ''); // Transport and Map Symbols
-  script = script.replace(/[\u{1F900}-\u{1F9FF}]/gu, ''); // Supplemental Symbols and Pictographs
-  script = script.replace(/[\u{1FA70}-\u{1FAFF}]/gu, ''); // Symbols and Pictographs Extended-A
-  
-  // 移除其他特殊符号（音乐符号、星星等）
-  script = script.replace(/[🎵🎶🎤🎧🎨🎪🎭🎬🎯🎰🎱🎲🎳🎴🎵🎶🎷🎸🎹🎺🎻🎼🎽🎾🎿🏀🏁🏂🏃🏄🏅🏆🏇🏈🏉🏊🏋🏌🏍🏎🏏🏐🏑🏒🏓🏔🏕🏖🏗🏘🏙🏚🏛🏜🏝🏞🏟🏠🏡🏢🏣🏤🏥🏦🏧🏨🏩🏪🏫🏬🏭🏮🏯🏰🏱🏲🏳🏴🏵🏶🏷🏸🏹🏺]/g, '');
-  
-  // 移除日文特殊字符（如 づ、♡ 等）
-  script = script.replace(/[づ♡♥]/g, '');
-  
-  // 移除其他装饰性符号（但保留中文常用的波浪号 ～）
-  // 移除星星、雪花等装饰性符号（但保留波浪号，因为中文常用）
-  script = script.replace(/[❀❁❂❃❄❅❆❇❈❉❊❋✲✳✴✵✶✷✸✹✺✻✼✽✾✿❀]/g, '');
+  let script = keepOnlySpeechFriendlyChars(text);
   
   // 清理多余空格
   script = script.replace(/\s{2,}/g, ' ').trim();

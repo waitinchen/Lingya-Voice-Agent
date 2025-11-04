@@ -119,3 +119,5 @@ recognition.onresult = (event) => {
 
 **实时语音功能已就绪！** 🎙️✨
 
+
+

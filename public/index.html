@@ -507,6 +507,51 @@
                 opacity: 1;
             }
         }
+        
+        /* 語氣標籤樣式 */
+        .tone-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin-top: 6px;
+            font-size: 0.75rem;
+            opacity: 0.75;
+            border-radius: 12px;
+            background: rgba(255, 182, 193, 0.2);
+            padding: 3px 8px;
+            color: #ff5fa2;
+            transition: opacity 0.2s ease;
+        }
+        
+        .tone-tag:hover {
+            opacity: 1;
+            background: rgba(255, 182, 193, 0.3);
+        }
+        
+        .tone-emoji {
+            font-size: 1rem;
+            line-height: 1;
+        }
+        
+        .tone-label {
+            font-weight: 500;
+            letter-spacing: 0.05em;
+            font-size: 0.7rem;
+        }
+        
+        /* 興奮語氣動畫（可選） */
+        .tone-tag[data-tag="excited"] {
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 0.75;
+            }
+            50% {
+                opacity: 1;
+            }
+        }
     </style>
 </head>
 <body>
@@ -559,6 +604,9 @@
         const statusEl = document.getElementById('status');
         
         let conversationHistory = []; // Step ③-B: 對話歷史記憶
+        let messageHistory = []; // 保存顯示的消息（用於恢復對話記錄）
+        const STORAGE_KEY_HISTORY = 'lingya_conversation_history'; // localStorage key for conversation history
+        const STORAGE_KEY_MESSAGES = 'lingya_message_history'; // localStorage key for message display
         let isRecording = false;
         let mediaRecorder = null;
         let audioChunks = [];
@@ -566,6 +614,105 @@
         const MIN_RECORDING_DURATION = 500; // 最小錄音時長（毫秒）：0.5秒
         let currentUserIdentity = null; // 歸屬記憶：用戶身份（'dad' 表示老爸，null 表示未知）
         let currentUserName = null; // 當前用戶名稱
+        
+        // ========================================
+        // localStorage 對話記錄管理
+        // ========================================
+        
+        // 保存對話歷史到 localStorage
+        function saveConversationHistory() {
+            try {
+                localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(conversationHistory));
+                localStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(messageHistory));
+                console.log('💾 對話記錄已保存到 localStorage');
+            } catch (error) {
+                console.error('❌ 保存對話記錄失敗:', error);
+            }
+        }
+        
+        // 從 localStorage 恢復對話記錄
+        function restoreConversationHistory() {
+            try {
+                const savedHistory = localStorage.getItem(STORAGE_KEY_HISTORY);
+                const savedMessages = localStorage.getItem(STORAGE_KEY_MESSAGES);
+                
+                if (savedHistory) {
+                    conversationHistory = JSON.parse(savedHistory);
+                    console.log(`📖 已恢復對話歷史（${conversationHistory.length} 輪對話）`);
+                }
+                
+                if (savedMessages) {
+                    messageHistory = JSON.parse(savedMessages);
+                    console.log(`📖 已恢復消息記錄（${messageHistory.length} 條消息）`);
+                    
+                    // 恢復消息顯示（排除歡迎消息）
+                    const welcomeMessage = messagesEl.querySelector('.message.assistant');
+                    messagesEl.innerHTML = '';
+                    if (welcomeMessage) {
+                        messagesEl.appendChild(welcomeMessage);
+                    }
+                    
+                    // 恢復所有消息
+                    messageHistory.forEach(msg => {
+                        const messageEl = document.createElement('div');
+                        messageEl.className = `message ${msg.role}`;
+                        
+                        const avatar = msg.role === 'user' ? '👤' : '🌸';
+                        
+                        let audioHtml = '';
+                        if (msg.audioBase64) {
+                            audioHtml = `
+                                <div class="message-audio">
+                                    <audio class="audio-player" controls>
+                                        <source src="data:audio/wav;base64,${msg.audioBase64}" type="audio/wav">
+                                    </audio>
+                                </div>
+                            `;
+                        }
+                        
+                        // 語氣標籤（只在助手消息且存在 toneTag 時顯示）
+                        let toneTagHtml = '';
+                        if (msg.role === 'assistant' && msg.toneTag && msg.toneTag.emoji && msg.toneTag.label) {
+                            toneTagHtml = `
+                                <div class="tone-tag">
+                                    <span class="tone-emoji">${msg.toneTag.emoji}</span>
+                                    <span class="tone-label">${msg.toneTag.label}</span>
+                                </div>
+                            `;
+                        }
+                        
+                        messageEl.innerHTML = `
+                            <div class="message-avatar">${avatar}</div>
+                            <div class="message-content">
+                                ${msg.text}
+                                ${audioHtml}
+                                ${toneTagHtml}
+                            </div>
+                        `;
+                        
+                        messagesEl.appendChild(messageEl);
+                    });
+                    
+                    // 滾動到底部
+                    messagesEl.scrollTop = messagesEl.scrollHeight;
+                }
+            } catch (error) {
+                console.error('❌ 恢復對話記錄失敗:', error);
+            }
+        }
+        
+        // 清除對話記錄（可選功能）
+        function clearConversationHistory() {
+            try {
+                localStorage.removeItem(STORAGE_KEY_HISTORY);
+                localStorage.removeItem(STORAGE_KEY_MESSAGES);
+                conversationHistory = [];
+                messageHistory = [];
+                console.log('🗑️ 對話記錄已清除');
+            } catch (error) {
+                console.error('❌ 清除對話記錄失敗:', error);
+            }
+        }
         
         // 实时音频分析
         let audioContext = null;
@@ -785,13 +932,14 @@
 
                 const data = await response.json();
                 
-                // 移除思考消息，添加實際回復
+                // 移除思考消息，添加實際回復（包含 toneTag）
                 removeThinkingMessage();
-                const messageElement = addMessage('assistant', data.reply);
+                const messageElement = addMessage('assistant', data.reply, false, null, data.toneTag || null);
                 
                 // 更新對話歷史
                 if (data.history) {
                     conversationHistory = data.history;
+                    saveConversationHistory(); // 保存對話歷史
                 }
                 
                 // 生成並播放語音（帶情緒控制），並添加到消息中
@@ -888,12 +1036,13 @@
                         console.warn('⚠️ 未收到转录文字');
                     }
                     
-                    // 移除思考動畫，顯示花小軟回應
+                    // 移除思考動畫，顯示花小軟回應（包含 toneTag）
                     removeThinkingMessage();
-                    const messageElement = addMessage('assistant', data.text, true, data.audio);
+                    const messageElement = addMessage('assistant', data.text, true, data.audio, data.toneTag || null);
                     
                     // 更新對話歷史（Step ③-B: 保持記憶）
                     conversationHistory = data.history || [];
+                    saveConversationHistory(); // 保存對話歷史
                     
                     // 如果有音頻，自動播放（語音輸入已包含音頻）
                     if (data.audio) {
@@ -998,7 +1147,7 @@
         }
 
         // 添加訊息到聊天
-        function addMessage(role, text, isVoice = false, audioBase64 = null) {
+        function addMessage(role, text, isVoice = false, audioBase64 = null, toneTag = null) {
             const messageEl = document.createElement('div');
             messageEl.className = `message ${role}`;
             
@@ -1015,16 +1164,44 @@
                 `;
             }
             
+            // 語氣標籤（只在助手消息且存在 toneTag 時顯示）
+            let toneTagHtml = '';
+            if (role === 'assistant' && toneTag && toneTag.emoji && toneTag.label) {
+                toneTagHtml = `
+                    <div class="tone-tag">
+                        <span class="tone-emoji">${toneTag.emoji}</span>
+                        <span class="tone-label">${toneTag.label}</span>
+                    </div>
+                `;
+            }
+            
             messageEl.innerHTML = `
                 <div class="message-avatar">${avatar}</div>
                 <div class="message-content">
                     ${text}
                     ${audioHtml}
+                    ${toneTagHtml}
                 </div>
             `;
             
             messagesEl.appendChild(messageEl);
             messagesEl.scrollTop = messagesEl.scrollHeight;
+            
+            // 保存到消息歷史（用於恢復對話記錄）
+            messageHistory.push({
+                role: role,
+                text: text,
+                audioBase64: audioBase64 || null,
+                toneTag: toneTag || null,
+                timestamp: Date.now()
+            });
+            
+            // 保存到 localStorage（限制數量，避免存儲過大）
+            if (messageHistory.length > 100) {
+                // 只保留最近100條消息
+                messageHistory = messageHistory.slice(-100);
+            }
+            saveConversationHistory();
             
             // 返回消息元素，方便後續添加音頻播放器
             return messageEl;
@@ -1088,9 +1265,47 @@
                     const audioBlob = await response.blob();
                     const audioUrl = URL.createObjectURL(audioBlob);
                     
-                    // 如果提供了消息元素，添加音頻播放器
+                    // 從響應 Header 獲取 toneTag
+                    const toneTagEmoji = response.headers.get('X-Tone-Tag-Emoji');
+                    const toneTagLabel = response.headers.get('X-Tone-Tag-Label');
+                    const toneTag = (toneTagEmoji && toneTagLabel) ? {
+                        emoji: toneTagEmoji,
+                        label: toneTagLabel
+                    } : null;
+                    
+                    // 將音頻轉換為 base64 以便保存（用於對話記錄恢復）
+                    const audioBase64 = await blobToBase64(audioBlob);
+                    
+                    // 如果提供了消息元素，添加音頻播放器（使用 base64 以便持久保存）
                     if (messageElement) {
-                        addAudioPlayerToMessage(messageElement, audioUrl);
+                        addAudioPlayerToMessage(messageElement, audioUrl, audioBase64);
+                        
+                        // 如果有 toneTag，添加到消息元素中
+                        if (toneTag) {
+                            const messageContent = messageElement.querySelector('.message-content');
+                            if (messageContent && !messageContent.querySelector('.tone-tag')) {
+                                const toneTagHtml = `
+                                    <div class="tone-tag">
+                                        <span class="tone-emoji">${toneTag.emoji}</span>
+                                        <span class="tone-label">${toneTag.label}</span>
+                                    </div>
+                                `;
+                                messageContent.insertAdjacentHTML('beforeend', toneTagHtml);
+                            }
+                        }
+                        
+                        // 更新消息歷史中的音頻 base64 和 toneTag（用於對話記錄恢復）
+                        if (messageHistory.length > 0) {
+                            // 找到對應的消息並更新
+                            const lastMessage = messageHistory[messageHistory.length - 1];
+                            if (lastMessage && lastMessage.role === 'assistant' && lastMessage.text === text.trim()) {
+                                lastMessage.audioBase64 = audioBase64;
+                                if (toneTag) {
+                                    lastMessage.toneTag = toneTag;
+                                }
+                                saveConversationHistory(); // 保存更新
+                            }
+                        }
                     }
                     
                     // 創建新的音頻對象並播放
@@ -1181,14 +1396,19 @@
         }
         
         // 添加音頻播放器到消息中
-        function addAudioPlayerToMessage(messageElement, audioUrl) {
+        function addAudioPlayerToMessage(messageElement, audioUrl, audioBase64 = null) {
             // 檢查是否已經有音頻播放器
             const existingAudio = messageElement.querySelector('.message-audio');
             if (existingAudio) {
                 // 更新現有播放器的源
                 const audio = existingAudio.querySelector('audio');
                 if (audio) {
-                    audio.src = audioUrl;
+                    // 如果提供了 base64，使用 base64（更持久），否則使用 URL
+                    if (audioBase64) {
+                        audio.src = `data:audio/wav;base64,${audioBase64}`;
+                    } else {
+                        audio.src = audioUrl;
+                    }
                     audio.load(); // 重新載入音頻
                     audio.style.display = 'block'; // 確保顯示
                 }
@@ -1198,10 +1418,15 @@
             // 創建新的音頻播放器
             const messageContent = messageElement.querySelector('.message-content');
             if (messageContent) {
+                // 如果提供了 base64，使用 base64（更持久），否則使用 URL
+                const audioSrc = audioBase64 
+                    ? `data:audio/wav;base64,${audioBase64}` 
+                    : audioUrl;
+                
                 const audioHtml = `
                     <div class="message-audio">
                         <audio class="audio-player" controls preload="auto">
-                            <source src="${audioUrl}" type="audio/wav">
+                            <source src="${audioSrc}" type="audio/wav">
                         </audio>
                     </div>
                 `;
@@ -1577,6 +1802,19 @@
         
         // 初始化語音識別
         initSpeechRecognition();
+        
+        // 頁面加載時恢復對話記錄
+        document.addEventListener('DOMContentLoaded', () => {
+            restoreConversationHistory();
+        });
+        
+        // 如果 DOM 已經加載完成，立即恢復
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', restoreConversationHistory);
+        } else {
+            // DOM 已經加載完成，立即恢復
+            restoreConversationHistory();
+        }
     </script>
 </body>
 </html>

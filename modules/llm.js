@@ -619,26 +619,60 @@ export async function chatWithLLM(prompt, conversationHistory = [], options = {}
       cleanedReply = cleanedReply.replace(pattern, '').trim();
     }
     
-    // 步骤4: 移除所有特殊符号（emoji、日文字符等不利于语音合成）
-    // 移除 emoji（包括各种 Unicode emoji 范围）
-    cleanedReply = cleanedReply.replace(/[\u{1F300}-\u{1F9FF}]/gu, ''); // Emoji Symbols
-    cleanedReply = cleanedReply.replace(/[\u{1FA00}-\u{1FAFF}]/gu, ''); // Symbols and Pictographs Extended-A
-    cleanedReply = cleanedReply.replace(/[\u{2600}-\u{26FF}]/gu, ''); // Miscellaneous Symbols
-    cleanedReply = cleanedReply.replace(/[\u{2700}-\u{27BF}]/gu, ''); // Dingbats
-    cleanedReply = cleanedReply.replace(/[\u{1F600}-\u{1F64F}]/gu, ''); // Emoticons
-    cleanedReply = cleanedReply.replace(/[\u{1F680}-\u{1F6FF}]/gu, ''); // Transport and Map Symbols
-    cleanedReply = cleanedReply.replace(/[\u{1F900}-\u{1F9FF}]/gu, ''); // Supplemental Symbols and Pictographs
-    cleanedReply = cleanedReply.replace(/[\u{1FA70}-\u{1FAFF}]/gu, ''); // Symbols and Pictographs Extended-A
+    // 步骤4: 严格过滤所有无法促成正确发音的符号
+    // 使用白名单方法：只保留中文、英文、数字、基本标点
+    // 允许的字符：
+    // - 中文字符：\u4e00-\u9fff（包括CJK统一汉字）
+    // - 英文字母：a-z, A-Z
+    // - 数字：0-9
+    // - 基本标点（语音友好）：，。！？～、：；""''（）《》
+    // - 空格和换行
+    function keepOnlySpeechFriendlyChars(text) {
+      let result = '';
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        const code = char.charCodeAt(0);
+        
+        // 中文字符（CJK统一汉字）
+        if (code >= 0x4e00 && code <= 0x9fff) {
+          result += char;
+          continue;
+        }
+        
+        // 英文字母（大小写）
+        if ((code >= 0x41 && code <= 0x5a) || (code >= 0x61 && code <= 0x7a)) {
+          result += char;
+          continue;
+        }
+        
+        // 数字
+        if (code >= 0x30 && code <= 0x39) {
+          result += char;
+          continue;
+        }
+        
+        // 基本标点（语音友好）
+        // 逗号、句号、感叹号、问号、波浪号、顿号、冒号、分号
+        // 引号、括号、书名号
+        const allowedPunctuation = [
+          '，', '。', '！', '？', '～', '、', '：', '；',  // 中文标点
+          ',', '.', '!', '?', ':', ';',  // 英文标点
+          '"', '"', ''', ''',  // 引号（全角半角）
+          '（', '）', '(', ')',  // 括号
+          '《', '》',  // 书名号
+          ' ', '\n', '\r', '\t',  // 空白字符
+        ];
+        if (allowedPunctuation.includes(char)) {
+          result += char;
+          continue;
+        }
+        
+        // 其他所有字符都过滤掉（包括emoji、日文、装饰符号等）
+      }
+      return result;
+    }
     
-    // 移除其他特殊符号（音乐符号、星星等）
-    cleanedReply = cleanedReply.replace(/[🎵🎶🎤🎧🎨🎪🎭🎬🎯🎰🎱🎲🎳🎴🎵🎶🎷🎸🎹🎺🎻🎼🎽🎾🎿🏀🏁🏂🏃🏄🏅🏆🏇🏈🏉🏊🏋🏌🏍🏎🏏🏐🏑🏒🏓🏔🏕🏖🏗🏘🏙🏚🏛🏜🏝🏞🏟🏠🏡🏢🏣🏤🏥🏦🏧🏨🏩🏪🏫🏬🏭🏮🏯🏰🏱🏲🏳🏴🏵🏶🏷🏸🏹🏺]/g, '');
-    
-    // 移除日文特殊字符（如 づ、♡ 等）
-    cleanedReply = cleanedReply.replace(/[づ♡♥]/g, '');
-    
-    // 移除其他装饰性符号（但保留中文常用的波浪号 ～，仅移除全角波浪号 ～ 在特定上下文中被视为装饰符号的情况很少，这里先保留）
-    // 移除星星、雪花等装饰性符号（但保留波浪号，因为中文常用）
-    cleanedReply = cleanedReply.replace(/[❀❁❂❃❄❅❆❇❈❉❊❋✲✳✴✵✶✷✸✹✺✻✼✽✾✿❀]/g, '');
+    cleanedReply = keepOnlySpeechFriendlyChars(cleanedReply);
     
     // 步骤5: 清理多余的空格（保留必要的单空格）
     cleanedReply = cleanedReply.replace(/\s{2,}/g, ' ').trim();

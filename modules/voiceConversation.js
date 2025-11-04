@@ -9,7 +9,7 @@ import { transcribeAudio, transcribeFromBase64 } from "./stt.js";
 import fs from "fs";
 import path from "path";
 import { chatWithLLM, analyzeEmotion } from "./llm.js";
-import { synthesizeSpeechCartesiaToBuffer } from "./tts-cartesia.js";
+import { synthesizeSpeechCartesiaToBuffer, getToneTag } from "./tts-cartesia.js";
 
 /**
  * 處理完整的語音對話流程（支持歸屬記憶）
@@ -109,6 +109,9 @@ export async function processVoiceConversation(audioInput, options = {}) {
       { role: "assistant", content: replyText },
     ];
 
+    // 獲取 toneTag 信息
+    const toneTag = getToneTag(selectedTags);
+
     return {
       success: true,
       text: replyText,
@@ -117,6 +120,7 @@ export async function processVoiceConversation(audioInput, options = {}) {
       history: updatedHistory,
       emotion, // 返回檢測到的情緒
       tags: selectedTags, // Step ③-B: 返回選擇的標籤
+      toneTag: toneTag, // 🎭 語氣圖案標籤
     };
   } catch (error) {
     console.error("❌ 語音對話處理失敗:", error);

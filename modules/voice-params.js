@@ -190,3 +190,5 @@ export function getVoiceParamsDescription(tags = []) {
   return `🎙️ 聲音參數：pitch=${params.pitch.toFixed(2)}, rate=${params.rate.toFixed(2)}, volume=${params.volume.toFixed(2)} | ${params.description}`;
 }
 
+
+

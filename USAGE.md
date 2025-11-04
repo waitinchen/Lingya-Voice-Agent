@@ -175,3 +175,5 @@ print('AI 回應:', result['text'])
 3. **Ollama**: 如果使用 Ollama，請確保 Ollama 服務正在運行。
 4. **音頻格式**: 建議使用 WAV 格式，16kHz 或更高採樣率。
 
+
+

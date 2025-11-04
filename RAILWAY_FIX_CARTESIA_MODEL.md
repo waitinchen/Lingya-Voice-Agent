@@ -43,3 +43,5 @@ https://railway.com/project/8f93ae2d-2c2e-462d-8ad3-2a5819938e6f/service/9b21f4d
 - Cartesia 使用的是 `sonic-3` 模型
 - 這是導致 TTS 失敗的主要原因
 
+
+

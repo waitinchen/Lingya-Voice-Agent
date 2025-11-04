@@ -158,3 +158,5 @@ CLAUDE_MODEL=claude-3-5-haiku-20241022
 
 > **注意**：在 Railway 中設置時，只需複製變數名和值（不需要 `=` 之前的部分，Railway 會自動處理）
 
+
+
