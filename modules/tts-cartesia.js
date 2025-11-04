@@ -266,9 +266,9 @@ export async function synthesizeSpeechCartesiaToBuffer(text, options = {}) {
     if (!process.env.CARTESIA_API_KEY) {
       throw new Error("CARTESIA_API_KEY environment variable is missing");
     }
-    if (!process.env.CARTESIA_VOICE_ID) {
-      throw new Error("CARTESIA_VOICE_ID environment variable is missing");
-    }
+    
+    // 注意：CARTESIA_VOICE_ID 不是必需的，因為我們可能使用 VOICE_MAP 中的 VoiceID
+    // 但如果既沒有環境變數也沒有匹配的標籤，會使用 DEFAULT_VOICE
     
     const { tags = [], emotion } = options;
     
@@ -380,6 +380,7 @@ export async function synthesizeSpeechCartesiaToBuffer(text, options = {}) {
     }
     
     console.log(`✅ Cartesia TTS 成功生成音頻，大小: ${(audioBuffer.length / 1024).toFixed(2)} KB`);
+    console.log(`   音頻格式: WAV, 採樣率: ${requestParams.outputFormat.sampleRate}Hz`);
     return audioBuffer;
   } catch (err) {
     console.error("❌ Cartesia TTS 錯誤：", err.message);

@@ -272,22 +272,42 @@ app.post("/api/speak-stream", async (req, res) => {
       });
     } catch (ttsError) {
       console.error("❌ TTS 生成失敗:", ttsError);
+      console.error("   錯誤類型:", ttsError.constructor.name);
+      console.error("   錯誤堆疊:", ttsError.stack);
+      
       // 返回詳細錯誤信息以便調試
       const errorMessage = ttsError.message || "TTS failed";
       const isEnvError = errorMessage.includes("environment variable");
-      return res.status(500).json({ 
+      
+      // 構建詳細的錯誤響應
+      const errorResponse = {
         error: errorMessage,
-        hint: isEnvError ? "請檢查 Railway 環境變數設置" : "TTS API 調用失敗，請檢查 Cartesia API Key 和 Voice ID"
-      });
+        hint: isEnvError ? "請檢查 Railway 環境變數設置" : "TTS API 調用失敗，請檢查 Cartesia API Key 和 Voice ID",
+      };
+      
+      // 如果是開發環境，添加更多調試信息
+      if (process.env.NODE_ENV !== 'production') {
+        errorResponse.details = {
+          type: ttsError.constructor.name,
+          stack: ttsError.stack,
+        };
+      }
+      
+      return res.status(500).json(errorResponse);
     }
 
     if (!audioBuffer || audioBuffer.length === 0) {
       return res.status(500).json({ error: "TTS returned empty audio buffer" });
     }
 
-    // 獲取 toneTag 信息
-    const { getToneTag } = await import("./modules/tts-cartesia.js");
-    const toneTag = getToneTag(finalTags);
+    // 獲取 toneTag 信息（如果失敗，使用默認值）
+    let toneTag = { emoji: "🌸", label: "平靜" }; // 默認值
+    try {
+      const { getToneTag } = await import("./modules/tts-cartesia.js");
+      toneTag = getToneTag(finalTags);
+    } catch (toneTagError) {
+      console.warn("⚠️ 獲取 toneTag 失敗，使用默認值:", toneTagError.message);
+    }
 
     // 設置正確的 Content-Type（WAV 格式）
     res.setHeader("Content-Type", "audio/wav");
