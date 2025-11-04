@@ -342,7 +342,30 @@ export async function synthesizeSpeechCartesiaToBuffer(text, options = {}) {
       console.log(`   💡 聲音層參數已計算（pitch=${voiceParams.pitch.toFixed(2)}, rate=${voiceParams.rate.toFixed(2)}, volume=${voiceParams.volume.toFixed(2)}），待 Cartesia API 支持時自動應用`);
     }
     
-    const response = await client.tts.bytes(requestParams);
+    console.log(`📡 發送 Cartesia TTS 請求...`);
+    console.log(`   模型: ${requestParams.modelId}`);
+    console.log(`   文字長度: ${script.length} 字符`);
+    console.log(`   VoiceID: ${selectedVoiceId}`);
+    
+    let response;
+    try {
+      response = await client.tts.bytes(requestParams);
+      console.log(`✅ 收到 Cartesia TTS 響應`);
+    } catch (apiError) {
+      console.error("❌ Cartesia API 調用失敗:");
+      console.error("   錯誤類型:", apiError.constructor.name);
+      console.error("   錯誤消息:", apiError.message);
+      if (apiError.status) {
+        console.error("   HTTP 狀態:", apiError.status);
+      }
+      if (apiError.response) {
+        console.error("   API 響應:", JSON.stringify(apiError.response, null, 2));
+      }
+      if (apiError.stack) {
+        console.error("   錯誤堆疊:", apiError.stack);
+      }
+      throw apiError;
+    }
 
     // 處理響應：SDK 返回的可能是流（Stream）
     let audioBuffer;
