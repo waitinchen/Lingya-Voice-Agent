@@ -230,7 +230,9 @@ export async function synthesizeSpeechCartesia(
       console.log(`   💡 聲音層參數已計算（pitch=${voiceParams.pitch.toFixed(2)}, rate=${voiceParams.rate.toFixed(2)}, volume=${voiceParams.volume.toFixed(2)}），待 Cartesia API 支持時自動應用`);
     }
     
-    const response = await client.tts.bytes(requestParams);
+    // 確保客戶端已初始化
+    const cartesiaClient = getCartesiaClient();
+    const response = await cartesiaClient.tts.bytes(requestParams);
 
     // 處理響應：SDK 返回的可能是流（Stream）
     let audioBuffer;
