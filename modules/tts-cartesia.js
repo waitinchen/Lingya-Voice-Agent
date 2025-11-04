@@ -12,9 +12,21 @@ import { mergeVoiceParams, getVoiceParamsDescription } from "./voice-params.js";
 
 dotenv.config();
 
-const client = new CartesiaClient({
-  apiKey: process.env.CARTESIA_API_KEY,
-});
+// 延遲初始化 Cartesia 客戶端（確保環境變數已載入）
+let client = null;
+function getCartesiaClient() {
+  if (!client) {
+    const apiKey = process.env.CARTESIA_API_KEY;
+    if (!apiKey) {
+      throw new Error("CARTESIA_API_KEY environment variable is missing");
+    }
+    client = new CartesiaClient({
+      apiKey: apiKey,
+    });
+    console.log("✅ Cartesia 客戶端已初始化");
+  }
+  return client;
+}
 
 // ========================================
 // 🎧 花小軟靈魂聲線系統：Voice Mapping
@@ -359,9 +371,12 @@ export async function synthesizeSpeechCartesiaToBuffer(text, options = {}) {
     console.log(`   文字長度: ${script.length} 字符`);
     console.log(`   VoiceID: ${selectedVoiceId}`);
     
+    // 確保客戶端已初始化
+    const cartesiaClient = getCartesiaClient();
+    
     let response;
     try {
-      response = await client.tts.bytes(requestParams);
+      response = await cartesiaClient.tts.bytes(requestParams);
       console.log(`✅ 收到 Cartesia TTS 響應`);
     } catch (apiError) {
       console.error("❌ Cartesia API 調用失敗:");
