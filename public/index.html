@@ -1239,7 +1239,8 @@
         }
 
         // 播放文字為語音（支持情緒控制），並添加到消息中
-        async function playTextAsSpeech(text, emotion = null, messageElement = null) {
+        async function playTextAsSpeech(textToSpeak, emotion = null, messageElement = null) {
+            const text = textToSpeak; // 保存原始文本供重試使用
             // 如果正在播放，停止当前播放
             if (currentAudio && !currentAudio.paused) {
                 currentAudio.pause();
@@ -1416,15 +1417,19 @@
                         const text = document.createElement('span');
                         text.textContent = `語音暫時無法播放（${errorHint}），但文字消息已收到 ✓`;
                         
-                        const retryBtn = document.createElement('button');
-                        retryBtn.textContent = '重試';
-                        retryBtn.style.cssText = 'margin-left: auto; padding: 4px 12px; background: #ff5fa2; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.75rem; font-weight: 500;';
-                        retryBtn.onclick = () => {
-                            errorDiv.remove();
-                            playTextAsSpeech(text, null, messageElement).catch(err => {
+                    const retryBtn = document.createElement('button');
+                    retryBtn.textContent = '重試';
+                    retryBtn.style.cssText = 'margin-left: auto; padding: 4px 12px; background: #ff5fa2; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.75rem; font-weight: 500;';
+                    retryBtn.onclick = () => {
+                        errorDiv.remove();
+                        // 從消息元素中獲取文本內容
+                        const messageText = messageElement ? messageElement.querySelector('.message-content')?.firstChild?.textContent?.trim() : null;
+                        if (messageText) {
+                            playTextAsSpeech(messageText, null, messageElement).catch(err => {
                                 console.error('重試失敗:', err);
                             });
-                        };
+                        }
+                    };
                         
                         errorDiv.appendChild(icon);
                         errorDiv.appendChild(text);
@@ -1464,9 +1469,13 @@
                     retryBtn.style.cssText = 'margin-left: auto; padding: 4px 12px; background: #ff5fa2; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.75rem; font-weight: 500;';
                     retryBtn.onclick = () => {
                         errorDiv.remove();
-                        playTextAsSpeech(text, null, messageElement).catch(err => {
-                            console.error('重試失敗:', err);
-                        });
+                        // 從消息元素中獲取文本內容
+                        const messageText = messageElement ? messageElement.querySelector('.message-content')?.firstChild?.textContent?.trim() : null;
+                        if (messageText) {
+                            playTextAsSpeech(messageText, null, messageElement).catch(err => {
+                                console.error('重試失敗:', err);
+                            });
+                        }
                     };
                     
                     errorDiv.appendChild(icon);
