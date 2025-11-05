@@ -6,6 +6,7 @@
  */
 
 import express from "express";
+import expressWs from "express-ws";
 import dotenv from "dotenv";
 import path from "path";
 import fs from "fs";
@@ -17,10 +18,13 @@ import { processVoiceConversation } from "./modules/voiceConversation.js";
 import { transcribeFromBase64 } from "./modules/stt.js";
 // 保留 OpenAI TTS 以便切換
 import { synthesizeSpeech, synthesizeSpeechToBuffer } from "./modules/tts.js";
+import { VoiceWebSocketServer } from "./modules/websocket-voice.js";
 
 dotenv.config();
 
 const app = express();
+// 啟用 WebSocket 支持
+expressWs(app);
 app.use(cookieParser());
 app.use(express.json({ limit: "50mb" })); // 支援大檔案
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
@@ -745,6 +749,9 @@ app.post("/api/speak-openai", async (req, res) => {
   }
 });
 
+// 初始化 WebSocket 語音服務器
+const wsServer = new VoiceWebSocketServer(app);
+
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
@@ -753,6 +760,7 @@ app.listen(PORT, () => {
   console.log(`   🔐 管理後台: http://localhost:${PORT}/admin (帳號/密碼: admin/admin)`);
   console.log(`   📝 文字對話: POST http://localhost:${PORT}/api/chat`);
   console.log(`   🎙️  語音對話: POST http://localhost:${PORT}/api/voice-chat`);
+  console.log(`   🔌 WebSocket 語音: ws://localhost:${PORT}/api/voice-ws (實時串流) 🆕`);
   console.log(`   🔊 語音合成: POST http://localhost:${PORT}/api/speak (Cartesia，支持自動推理標籤) 🎙️`);
   console.log(`   🎧 語氣預覽: POST http://localhost:${PORT}/api/preview (快速試聽語氣組合)`);
   console.log(`   🔮 聲音快取: GET http://localhost:${PORT}/api/preset/:name?text=... (預設語氣)`);
