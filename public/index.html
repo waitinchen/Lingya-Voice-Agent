@@ -2166,7 +2166,15 @@
         async function startRecording() {
             try {
                 console.log('🎤 開始錄音...');
+                
+                // 檢查媒體設備支持
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('瀏覽器不支持媒體設備 API');
+                }
+                
+                // 獲取媒體流
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                console.log('✅ 獲取媒體流成功，音軌數量:', stream.getAudioTracks().length);
                 
                 // 初始化 Web Audio API（用於可視化）
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -2208,6 +2216,8 @@
                     mimeType: mimeType
                 });
                 
+                console.log('✅ MediaRecorder 創建成功，MIME 類型:', mimeType);
+                
                 audioChunks = [];
                 realtimeTranscript = ''; // 重置轉錄文字
                 silenceStartTime = null; // 重置静音计时
@@ -2222,8 +2232,16 @@
                     fileExtension = 'ogg';
                 }
                 
+                // 添加 MediaRecorder 事件處理
+                mediaRecorder.onstart = () => {
+                    console.log('✅ MediaRecorder 開始錄制，狀態:', mediaRecorder.state);
+                    isRecording = true;
+                    voiceBtn.classList.add('recording');
+                    setStatus('正在錄音... 🎤');
+                };
+                
                 mediaRecorder.ondataavailable = (event) => {
-                    if (event.data.size > 0) {
+                    if (event.data && event.data.size > 0) {
                         audioChunks.push(event.data);
                         console.log(`📦 錄音數據塊: ${event.data.size} bytes`);
                         
@@ -2233,7 +2251,8 @@
                             const reader = new FileReader();
                             reader.onloadend = () => {
                                 const base64 = reader.result.split(',')[1];
-                                sendWSMessage({
+                                console.log(`📤 發送 audio_chunk，Base64 長度: ${base64.length}`);
+                                const success = sendWSMessage({
                                     type: 'audio_chunk',
                                     data: {
                                         audio: base64,
@@ -2242,9 +2261,17 @@
                                         channels: 1
                                     }
                                 });
+                                if (!success) {
+                                    console.error('❌ 發送 audio_chunk 失敗：WebSocket 未連接');
+                                }
+                            };
+                            reader.onerror = (error) => {
+                                console.error('❌ FileReader 錯誤:', error);
                             };
                             reader.readAsDataURL(event.data);
                         }
+                    } else {
+                        console.warn('⚠️ 收到空的錄音數據塊');
                     }
                 };
                 
@@ -2346,13 +2373,29 @@
                 
                 mediaRecorder.onerror = (event) => {
                     console.error('❌ MediaRecorder 錯誤:', event.error);
-                    setStatus('錄音發生錯誤');
+                    console.error('   錯誤名稱:', event.error?.name);
+                    console.error('   錯誤消息:', event.error?.message);
+                    setStatus('錄音發生錯誤: ' + (event.error?.message || '未知錯誤'));
+                    isRecording = false;
+                    voiceBtn.classList.remove('recording');
                 };
                 
-                mediaRecorder.start(100); // 每 100ms 觸發一次 ondataavailable（用於流式傳輸）
-                isRecording = true;
-                recordingStartTime = Date.now(); // 記錄開始時間
-                voiceBtn.classList.add('recording');
+                mediaRecorder.onstop = () => {
+                    console.log('🛑 MediaRecorder 停止，最終狀態:', mediaRecorder.state);
+                };
+                
+                // 開始錄制
+                try {
+                    mediaRecorder.start(100); // 每 100ms 觸發一次 ondataavailable（用於流式傳輸）
+                    console.log('🎙️ MediaRecorder.start() 調用成功，狀態:', mediaRecorder.state);
+                    recordingStartTime = Date.now(); // 記錄開始時間
+                    // 注意：isRecording 和 recording 類會在 onstart 事件中設置
+                } catch (error) {
+                    console.error('❌ MediaRecorder.start() 失敗:', error);
+                    setStatus('錄音啟動失敗: ' + error.message);
+                    isRecording = false;
+                    voiceBtn.classList.remove('recording');
+                }
                 
                 // 如果使用 WebSocket，重置狀態
                 if (useWebSocket && wsConnection && wsConnection.readyState === WebSocket.OPEN) {
