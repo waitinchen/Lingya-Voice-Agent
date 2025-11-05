@@ -221,7 +221,12 @@
         }
 
         .message.assistant .message-avatar {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            background-image: url('/images/huangrong-avatar.jpg');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            color: transparent; /* 隱藏 emoji 文字 */
+            overflow: hidden;
         }
 
         .message-content {
@@ -556,12 +561,12 @@
 <body>
     <div class="chat-container">
         <div class="chat-header">
-            <h1>🌸 花小軟- 語氣之靈</h1>
+            <h1>黃蓉</h1>
         </div>
         
         <div class="chat-messages" id="messages">
             <div class="message assistant">
-                <div class="message-avatar">🌸</div>
+                <div class="message-avatar"></div>
                 <div class="message-content">
                     我是花小軟。
                 </div>
@@ -1150,7 +1155,7 @@
             const messageEl = document.createElement('div');
             messageEl.className = `message ${role}`;
             
-            const avatar = role === 'user' ? '👤' : '🌸';
+            const avatar = role === 'user' ? '👤' : ''; // 助手頭像使用圖片，不需要 emoji
             
             let audioHtml = '';
             if (isVoice && audioBase64) {
