@@ -24,7 +24,14 @@ dotenv.config();
 
 const app = express();
 // 啟用 WebSocket 支持
-expressWs(app);
+try {
+  expressWs(app);
+  console.log("✅ express-ws 已啟用");
+} catch (error) {
+  console.error("❌ express-ws 初始化失敗:", error);
+  console.warn("⚠️  WebSocket 功能將不可用");
+  // 不阻止應用啟動，允許 HTTP API 繼續工作
+}
 app.use(cookieParser());
 app.use(express.json({ limit: "50mb" })); // 支援大檔案
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
@@ -749,20 +756,54 @@ app.post("/api/speak-openai", async (req, res) => {
   }
 });
 
-// 初始化 WebSocket 語音服務器
-const wsServer = new VoiceWebSocketServer(app);
+// 初始化 WebSocket 語音服務器（使用 try-catch 包裹，避免啟動失敗）
+let wsServer = null;
+try {
+  wsServer = new VoiceWebSocketServer(app);
+  console.log("✅ WebSocket 語音服務器初始化成功");
+} catch (wsError) {
+  console.error("❌ WebSocket 服務器初始化失敗:", wsError);
+  console.warn("⚠️  應用將繼續運行，但 WebSocket 功能不可用");
+  // 不阻止應用啟動，允許 HTTP API 繼續工作
+}
+
+// 添加全局錯誤處理
+process.on("uncaughtException", (error) => {
+  console.error("❌ 未捕獲的異常:", error);
+  console.error("   堆疊:", error.stack);
+  // 不退出進程，記錄錯誤即可（Railway 會自動重啟）
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("❌ 未處理的 Promise 拒絕:", reason);
+  console.error("   發生在:", promise);
+  if (reason && reason.stack) {
+    console.error("   堆疊:", reason.stack);
+  }
+});
 
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server started on port ${PORT}`);
-  console.log(`   🌐 ChatKit 界面: http://localhost:${PORT}`);
-  console.log(`   🔐 管理後台: http://localhost:${PORT}/admin (帳號/密碼: admin/admin)`);
-  console.log(`   📝 文字對話: POST http://localhost:${PORT}/api/chat`);
-  console.log(`   🎙️  語音對話: POST http://localhost:${PORT}/api/voice-chat`);
-  console.log(`   🔌 WebSocket 語音: ws://localhost:${PORT}/api/voice-ws (實時串流) 🆕`);
-  console.log(`   🔊 語音合成: POST http://localhost:${PORT}/api/speak (Cartesia，支持自動推理標籤) 🎙️`);
-  console.log(`   🎧 語氣預覽: POST http://localhost:${PORT}/api/preview (快速試聽語氣組合)`);
-  console.log(`   🔮 聲音快取: GET http://localhost:${PORT}/api/preset/:name?text=... (預設語氣)`);
-  console.log(`   🎤 語音識別: POST http://localhost:${PORT}/api/transcribe\n`);
-});
+// 啟動服務器（添加錯誤處理）
+try {
+  app.listen(PORT, () => {
+    console.log(`🚀 Server started on port ${PORT}`);
+    console.log(`   🌐 ChatKit 界面: http://localhost:${PORT}`);
+    console.log(`   🔐 管理後台: http://localhost:${PORT}/admin (帳號/密碼: admin/admin)`);
+    console.log(`   📝 文字對話: POST http://localhost:${PORT}/api/chat`);
+    console.log(`   🎙️  語音對話: POST http://localhost:${PORT}/api/voice-chat`);
+    if (wsServer) {
+      console.log(`   🔌 WebSocket 語音: ws://localhost:${PORT}/api/voice-ws (實時串流) 🆕`);
+    } else {
+      console.log(`   ⚠️  WebSocket 語音: 不可用（使用 HTTP API）`);
+    }
+    console.log(`   🔊 語音合成: POST http://localhost:${PORT}/api/speak (Cartesia，支持自動推理標籤) 🎙️`);
+    console.log(`   🎧 語氣預覽: POST http://localhost:${PORT}/api/preview (快速試聽語氣組合)`);
+    console.log(`   🔮 聲音快取: GET http://localhost:${PORT}/api/preset/:name?text=... (預設語氣)`);
+    console.log(`   🎤 語音識別: POST http://localhost:${PORT}/api/transcribe\n`);
+  });
+} catch (startError) {
+  console.error("❌ 服務器啟動失敗:", startError);
+  console.error("   堆疊:", startError.stack);
+  process.exit(1);
+}

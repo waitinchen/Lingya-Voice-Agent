@@ -19,19 +19,38 @@ export class VoiceWebSocketServer {
   constructor(expressApp) {
     this.app = expressApp;
     this.sessions = new Map(); // sessionId -> VoiceSession
-    this.setup();
+    
+    // 延遲設置，避免在構造函數中拋出錯誤
+    try {
+      this.setup();
+    } catch (error) {
+      console.error("❌ VoiceWebSocketServer 設置失敗:", error);
+      throw error;
+    }
   }
 
   /**
    * 設置 WebSocket 端點
    */
   setup() {
-    // 使用 express-ws 設置 WebSocket 端點
-    this.app.ws("/api/voice-ws", (ws, req) => {
-      this.handleConnection(ws, req);
-    });
+    // 檢查 app.ws 是否可用（express-ws 已正確初始化）
+    if (typeof this.app.ws !== "function") {
+      console.error("❌ app.ws 不可用，WebSocket 端點無法設置");
+      console.warn("⚠️  請確保 express-ws 已正確初始化");
+      return;
+    }
     
-    console.log("✅ WebSocket 語音端點已設置: /api/voice-ws");
+    try {
+      // 使用 express-ws 設置 WebSocket 端點
+      this.app.ws("/api/voice-ws", (ws, req) => {
+        this.handleConnection(ws, req);
+      });
+      
+      console.log("✅ WebSocket 語音端點已設置: /api/voice-ws");
+    } catch (error) {
+      console.error("❌ 設置 WebSocket 端點失敗:", error);
+      throw error;
+    }
   }
 
   /**
@@ -306,6 +325,10 @@ export class VoiceWebSocketServer {
       return;
     }
 
+    // 創建新的 AbortController（用於中止本次 LLM 請求）
+    session.createAbortController();
+    const abortSignal = session.getAbortSignal();
+
     // 設置狀態為思考中
     session.setState(SessionState.THINKING);
 
@@ -395,11 +418,12 @@ export class VoiceWebSocketServer {
             enableTags: true,
             userIdentity: session.userIdentity,
             userName: session.userName,
+            abortSignal: abortSignal, // 傳遞 abort signal
           },
           // onChunk 回調：發送增量文字
           (chunk) => {
             // 檢查是否被打斷
-            if (session.isInterrupted) {
+            if (session.isInterrupted || (abortSignal && abortSignal.aborted)) {
               return;
             }
 
@@ -450,6 +474,13 @@ export class VoiceWebSocketServer {
       await this.handleTTSStream(session, finalReply, finalTags, emotion);
 
     } catch (error) {
+      // 如果是中止錯誤，不發送錯誤消息
+      if (error.name === "AbortError" || error.message === "LLM stream aborted") {
+        console.log(`⏹️  LLM 流式處理被中止 (${session.id})`);
+        session.setState(SessionState.IDLE);
+        return;
+      }
+
       console.error(`❌ LLM 流式處理失敗 (${session.id}):`, error);
 
       // 重置狀態
@@ -475,6 +506,10 @@ export class VoiceWebSocketServer {
       return;
     }
 
+    // 創建新的 AbortController（用於中止本次 TTS 請求）
+    session.createAbortController();
+    const abortSignal = session.getAbortSignal();
+
     // 設置狀態為說話中
     session.setState(SessionState.SPEAKING);
 
@@ -496,11 +531,12 @@ export class VoiceWebSocketServer {
         {
           tags: tags,
           emotion: emotion,
+          abortSignal: abortSignal, // 傳遞 abort signal
         },
         // onChunk 回調：發送音頻片段
         (chunkData) => {
           // 檢查是否被打斷
-          if (session.isInterrupted) {
+          if (session.isInterrupted || (abortSignal && abortSignal.aborted)) {
             return;
           }
 
@@ -551,6 +587,13 @@ export class VoiceWebSocketServer {
       session.setState(SessionState.IDLE);
 
     } catch (error) {
+      // 如果是中止錯誤，不發送錯誤消息
+      if (error.name === "AbortError" || error.message === "TTS stream aborted") {
+        console.log(`⏹️  TTS 流式處理被中止 (${session.id})`);
+        session.setState(SessionState.IDLE);
+        return;
+      }
+
       console.error(`❌ TTS 流式處理失敗 (${session.id}):`, error);
 
       // 重置狀態
@@ -572,21 +615,49 @@ export class VoiceWebSocketServer {
     const reason = msg.data?.reason || "user_interrupt";
     console.log(`⏹️  處理打斷請求 (${session.id}): ${reason}`);
 
+    // 記錄當前狀態（用於日誌）
+    const currentState = session.currentState;
+
+    // 觸發打斷（會中止 AbortController）
     session.interrupt(reason);
 
-    // TODO: Phase 5 - 實現完整的打斷邏輯
+    // 根據當前狀態進行不同的清理
+    if (currentState === SessionState.LISTENING) {
+      // 正在接收音頻，清空緩衝區
+      session.clearAudioBuffer();
+      console.log(`   🧹 清空音頻緩衝區`);
+    } else if (currentState === SessionState.TRANSCRIBING) {
+      // 正在轉錄，清空緩衝區
+      session.clearAudioBuffer();
+      session.currentTranscription = "";
+      console.log(`   🧹 清空轉錄狀態`);
+    } else if (currentState === SessionState.THINKING) {
+      // LLM 正在生成，AbortController 會自動中止請求
+      session.currentLLMResponse = "";
+      session.currentTags = [];
+      console.log(`   🧹 中止 LLM 生成`);
+    } else if (currentState === SessionState.SPEAKING) {
+      // TTS 正在生成，AbortController 會自動中止請求
+      console.log(`   🧹 中止 TTS 生成`);
+    }
+
     // 發送打斷確認
     this.sendMessage(session, {
       type: "interrupted",
       data: {
         reason,
+        previousState: currentState,
         timestamp: Date.now(),
       },
     });
 
-    // 重置狀態
+    // 重置狀態為空閒
     session.setState(SessionState.IDLE);
+    
+    // 清空音頻緩衝區（確保沒有殘留）
     session.clearAudioBuffer();
+
+    console.log(`✅ 打斷處理完成 (${session.id}): ${currentState} → IDLE`);
   }
 
   /**

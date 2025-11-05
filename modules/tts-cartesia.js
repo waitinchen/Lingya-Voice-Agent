@@ -113,7 +113,7 @@ export function getToneTag(emotionTags = []) {
  * @param {Array<string>} tags - 語氣標籤列表
  * @returns {string} VoiceID
  */
-function selectVoiceByTags(tags = []) {
+export function selectVoiceByTags(tags = []) {
   // 優先使用環境變數中的 VoiceID（如果設置了）
   // 因為 VOICE_MAP 中的 VoiceID 可能在某些環境中不可用
   const envVoiceId = process.env.CARTESIA_VOICE_ID;
