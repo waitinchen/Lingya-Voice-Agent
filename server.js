@@ -103,39 +103,72 @@ app.post("/api/chat", async (req, res) => {
       }
     }
 
-    // 分析情緒（如果沒有提供）
-    let detectedEmotion = emotion;
-    if (!detectedEmotion) {
-      const { analyzeEmotion } = await import("./modules/llm.js");
-      detectedEmotion = await analyzeEmotion(text);
+    // 🎯 Step 1: Prompt Routing 檢查（優先於 LLM）
+    let routingResult = null;
+    let finalReply = null;
+    let finalTags = [];
+    let routingType = "normal";
+    
+    try {
+      const { processPromptRouting } = await import("./modules/prompt-routing.js");
+      
+      // 嘗試路由（如果匹配，會使用 responsePool 中的回應）
+      routingResult = await processPromptRouting(text, async (poolResponse, routing) => {
+        // 直接返回 poolResponse，保持黃蓉的原始語氣
+        return poolResponse;
+      });
+      
+      if (routingResult && routingResult.success) {
+        console.log(`🎯 使用 Prompt Routing 回應（${routingResult.persona}）`);
+        finalReply = routingResult.response;
+        finalTags = routingResult.voiceConfig?.tags || [];
+        routingType = routingResult.routingType;
+      }
+    } catch (routingError) {
+      console.warn("⚠️ Prompt Routing 處理失敗，使用正常 LLM 流程:", routingError);
     }
 
-    // 使用對話歷史和情緒生成回應（支持標籤選擇和身份識別）
-    const llmResult = await chatWithLLM(text, history, {
-      emotion: detectedEmotion,
-      isVoice: false,
-      enableTags: true, // 啟用標籤選擇
-      userIdentity: detectedIdentity, // 傳遞用戶身份
-      userName: userName, // 傳遞用戶名稱
-    });
+    // Step 2: 如果沒有路由匹配，使用正常 LLM 流程
+    if (!finalReply) {
+      // 分析情緒（如果沒有提供）
+      let detectedEmotion = emotion;
+      if (!detectedEmotion) {
+        const { analyzeEmotion } = await import("./modules/llm.js");
+        detectedEmotion = await analyzeEmotion(text);
+      }
+
+      // 使用對話歷史和情緒生成回應（支持標籤選擇和身份識別）
+      const llmResult = await chatWithLLM(text, history, {
+        emotion: detectedEmotion,
+        isVoice: false,
+        enableTags: true, // 啟用標籤選擇
+        userIdentity: detectedIdentity, // 傳遞用戶身份
+        userName: userName, // 傳遞用戶名稱
+      });
+      
+      finalReply = llmResult.reply;
+      finalTags = llmResult.tags || [];
+      routingType = "normal";
+    }
 
     // 更新對話歷史
     const updatedHistory = [
       ...history,
       { role: "user", content: text },
-      { role: "assistant", content: llmResult.reply },
+      { role: "assistant", content: finalReply },
     ];
 
     // 獲取 toneTag 信息
     const { getToneTag } = await import("./modules/tts-cartesia.js");
-    const toneTag = getToneTag(llmResult.tags || []);
+    const toneTag = getToneTag(finalTags);
 
     res.json({
-      reply: llmResult.reply,
-      tags: llmResult.tags || [], // Step ③-B: 返回選擇的標籤
-      emotion: detectedEmotion,
+      reply: finalReply,
+      tags: finalTags, // Step ③-B: 返回選擇的標籤
+      emotion: routingType === "pool" ? null : emotion, // routing 時不使用 emotion
       history: updatedHistory,
       toneTag: toneTag, // 🎭 語氣圖案標籤
+      routingType: routingType, // 標記路由類型（用於調試）
     });
   } catch (error) {
     console.error("❌ 處理請求失敗:", error);
