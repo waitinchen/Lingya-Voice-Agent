@@ -204,8 +204,8 @@ export async function chatWithLLMStream(prompt, conversationHistory = [], option
     
     // 確保系統提示詞已載入
     if (!SYSTEM_PROMPT) {
-      const { loadSystemPrompt } = await import("./llm.js");
-      SYSTEM_PROMPT = await loadSystemPrompt();
+      const { getSystemPrompt } = await import("./llm.js");
+      SYSTEM_PROMPT = await getSystemPrompt();
     }
     
     const { emotion, enableTags = true, userIdentity, userName, abortSignal } = options;
