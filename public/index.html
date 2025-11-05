@@ -227,6 +227,27 @@
             background-repeat: no-repeat;
             color: transparent; /* 隱藏 emoji 文字 */
             overflow: hidden;
+            /* 如果圖片不存在，顯示默認背景 */
+            background-color: #f093fb;
+            background-blend-mode: overlay;
+        }
+        
+        /* 圖片加載失敗時的備用樣式 */
+        .message.assistant .message-avatar::before {
+            content: '🌸';
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            font-size: 20px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        
+        .message.assistant .message-avatar:not([style*="background-image"])::before,
+        .message.assistant .message-avatar[data-image-error="true"]::before {
+            opacity: 1;
         }
 
         .message-content {
