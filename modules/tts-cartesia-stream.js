@@ -37,7 +37,7 @@ async function getClient() {
  */
 export async function synthesizeSpeechCartesiaStream(text, options = {}, onChunk = null) {
   try {
-    const { tags = [], emotion, onChunk } = options;
+    const { tags = [], emotion } = options;
     
     // 導入情緒處理模組
     const { applyEmotion } = await import("../helpers/emotion.js");
