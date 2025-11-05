@@ -537,7 +537,6 @@
         .tone-tag {
             display: inline-flex;
             align-items: center;
-            gap: 4px;
             margin-top: 6px;
             font-size: 0.75rem;
             opacity: 0.75;
@@ -551,11 +550,6 @@
         .tone-tag:hover {
             opacity: 1;
             background: rgba(255, 182, 193, 0.3);
-        }
-        
-        .tone-emoji {
-            font-size: 1rem;
-            line-height: 1;
         }
         
         .tone-label {
@@ -697,10 +691,9 @@
                         
                         // 語氣標籤（只在助手消息且存在 toneTag 時顯示）
                         let toneTagHtml = '';
-                        if (msg.role === 'assistant' && msg.toneTag && msg.toneTag.emoji && msg.toneTag.label) {
+                        if (msg.role === 'assistant' && msg.toneTag && msg.toneTag.label) {
                             toneTagHtml = `
                                 <div class="tone-tag">
-                                    <span class="tone-emoji">${msg.toneTag.emoji}</span>
                                     <span class="tone-label">${msg.toneTag.label}</span>
                                 </div>
                             `;
@@ -1191,10 +1184,9 @@
             
             // 語氣標籤（只在助手消息且存在 toneTag 時顯示）
             let toneTagHtml = '';
-            if (role === 'assistant' && toneTag && toneTag.emoji && toneTag.label) {
+            if (role === 'assistant' && toneTag && toneTag.label) {
                 toneTagHtml = `
                     <div class="tone-tag">
-                        <span class="tone-emoji">${toneTag.emoji}</span>
                         <span class="tone-label">${toneTag.label}</span>
                     </div>
                 `;
@@ -1367,7 +1359,6 @@
                             if (messageContent && !messageContent.querySelector('.tone-tag')) {
                                 const toneTagHtml = `
                                     <div class="tone-tag">
-                                        <span class="tone-emoji">${toneTag.emoji}</span>
                                         <span class="tone-label">${toneTag.label}</span>
                                     </div>
                                 `;
