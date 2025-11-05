@@ -125,11 +125,16 @@
 
 ### 🔴 高優先級
 
-1. **WebSocket 實時串流**
-   - [ ] 實現 WebSocket 端點 (`/api/voice-ws`)
-   - [ ] 實時音頻流處理
-   - [ ] 雙向語音通信
-   - [ ] 低延遲語音響應
+1. **WebSocket 實時串流** 🚧 進行中
+   - [x] 架構設計文檔 (`docs/WEBSOCKET_STREAM_ARCHITECTURE.md`)
+   - [x] 實現計劃文檔 (`docs/WEBSOCKET_IMPLEMENTATION_PLAN.md`)
+   - [ ] Phase 1: 基礎架構（WebSocket 端點、消息協議、會話管理）
+   - [ ] Phase 2: 音頻處理（音頻片段接收、VAD、STT 集成）
+   - [ ] Phase 3: LLM 流式處理（流式輸出、Prompt Routing 集成）
+   - [ ] Phase 4: TTS 流式處理（分塊生成、邊生成邊播放）
+   - [ ] Phase 5: 打斷機制（interrupt 處理、狀態清理）
+   - [ ] Phase 6: 前端集成（WebSocket 客戶端、音頻錄製、流式顯示）
+   - [ ] Phase 7: 測試與優化（單元測試、集成測試、性能優化）
 
 2. **語音歷史記錄**
    - [ ] 語音消息的持久化存儲
@@ -287,4 +292,5 @@ modules/
 
 **最後更新：** 2025-01-27  
 **維護者：** Waitin Chen × 謀謀
+
 
