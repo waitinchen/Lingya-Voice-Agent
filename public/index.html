@@ -661,7 +661,7 @@
                         const messageEl = document.createElement('div');
                         messageEl.className = `message ${msg.role}`;
                         
-                        const avatar = msg.role === 'user' ? '👤' : '🌸';
+                        const avatar = msg.role === 'user' ? '👤' : ''; // 助手頭像使用圖片
                         
                         let audioHtml = '';
                         if (msg.audioBase64) {
@@ -1180,7 +1180,7 @@
             }
             
             messageEl.innerHTML = `
-                <div class="message-avatar">${avatar}</div>
+                <div class="message-avatar">${role === 'user' ? avatar : ''}</div>
                 <div class="message-content">
                     ${text}
                     ${audioHtml}
@@ -1218,7 +1218,7 @@
             messageEl.setAttribute('data-thinking', 'true'); // 標記為思考消息
             
             messageEl.innerHTML = `
-                <div class="message-avatar">🌸</div>
+                <div class="message-avatar"></div>
                 <div class="message-content">
                     <div class="thinking-animation">
                         <div class="thinking-ball"></div>
