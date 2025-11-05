@@ -453,12 +453,18 @@ app.post("/api/admin/login", (req, res) => {
       
       // 設置 Cookie（生產環境需要 secure 和 sameSite）
       const isProduction = process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT;
-      res.cookie("admin_session", sessionId, {
+      const cookieOptions = {
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000, // 24小時
-        secure: isProduction, // 生產環境使用 HTTPS
-        sameSite: isProduction ? 'none' : 'lax', // 生產環境可能需要 'none'
-      });
+      };
+      
+      // 如果是生產環境（Railway），添加 secure 和 sameSite
+      if (isProduction) {
+        cookieOptions.secure = true; // 只在 HTTPS 下傳輸
+        cookieOptions.sameSite = 'none'; // 允許跨域
+      }
+      
+      res.cookie("admin_session", sessionId, cookieOptions);
       
       console.log(`✅ 管理後台登入成功: sessionId=${sessionId.substring(0, 10)}...`);
       res.json({ success: true, message: "登入成功" });
