@@ -7,6 +7,9 @@ import { VoiceSession, SessionState } from "./voice-session.js";
 import { transcribeFromBase64 } from "./stt.js";
 import { analyzeEmotion } from "./llm.js";
 import { mergeAudioChunks } from "./audio-processor.js";
+import { chatWithLLMStream } from "./llm-stream.js";
+import { processPromptRouting } from "./prompt-routing.js";
+import { getToneTag } from "./tts-cartesia.js";
 
 /**
  * WebSocket 語音服務器類
@@ -272,8 +275,8 @@ export class VoiceWebSocketServer {
       // 清空音頻緩衝區
       session.clearAudioBuffer();
 
-      // 狀態保持為 TRANSCRIBING，等待 LLM 處理（Phase 3）
-      // TODO: Phase 3 - 觸發 LLM 處理
+      // Phase 3: 觸發 LLM 流式處理
+      await this.handleLLMStream(session, transcribedText, emotion);
 
     } catch (error) {
       console.error(`❌ STT 處理失敗 (${session.id}):`, error);
@@ -287,6 +290,175 @@ export class VoiceWebSocketServer {
         session,
         error.message || "語音識別失敗",
         "STT_ERROR"
+      );
+    }
+  }
+
+  /**
+   * 處理 LLM 流式處理
+   */
+  async handleLLMStream(session, transcribedText, emotion) {
+    // 檢查是否被打斷
+    if (session.isInterrupted) {
+      console.log(`⏹️  會話 ${session.id} 已被打斷，取消 LLM 處理`);
+      session.setState(SessionState.IDLE);
+      return;
+    }
+
+    // 設置狀態為思考中
+    session.setState(SessionState.THINKING);
+
+    // 發送 LLM 開始消息
+    this.sendMessage(session, {
+      type: "llm_stream_start",
+      data: {
+        status: "thinking",
+      },
+    });
+
+    try {
+      // Step 1: 檢查 Prompt Routing
+      let routingResult = null;
+      let finalReply = null;
+      let finalTags = [];
+      let routingType = "normal";
+
+      try {
+        routingResult = await processPromptRouting(transcribedText, async (poolResponse, routing) => {
+          return poolResponse;
+        });
+
+        if (routingResult && routingResult.success) {
+          console.log(`🎯 使用 Prompt Routing 回應（${routingResult.persona}）`);
+          finalReply = routingResult.response;
+          finalTags = routingResult.voiceConfig?.tags || [];
+          routingType = routingResult.routingType;
+
+          // 檢查是否被打斷
+          if (session.isInterrupted) {
+            session.setState(SessionState.IDLE);
+            return;
+          }
+
+          // 發送完整的回應（非流式，因為是預定義回應）
+          this.sendMessage(session, {
+            type: "llm_stream_chunk",
+            data: {
+              text: finalReply,
+              delta: finalReply,
+              fullText: finalReply,
+              tags: finalTags,
+            },
+          });
+
+          // 發送結束消息
+          const toneTag = getToneTag(finalTags);
+          this.sendMessage(session, {
+            type: "llm_stream_end",
+            data: {
+              fullText: finalReply,
+              tags: finalTags,
+              toneTag: toneTag,
+              emotion: emotion,
+              routingType: routingType,
+            },
+          });
+
+          // 更新會話狀態和歷史
+          session.currentLLMResponse = finalReply;
+          session.currentTags = finalTags;
+          session.addToHistory("user", transcribedText);
+          session.addToHistory("assistant", finalReply);
+
+          // 狀態保持為 THINKING，等待 TTS 處理（Phase 4）
+          // TODO: Phase 4 - 觸發 TTS 處理
+
+          return;
+        }
+      } catch (routingError) {
+        console.warn("⚠️ Prompt Routing 處理失敗，使用正常 LLM 流程:", routingError);
+      }
+
+      // Step 2: 如果沒有路由匹配，使用正常 LLM 流式流程
+      if (!finalReply) {
+        // 獲取對話歷史
+        const history = session.history || [];
+
+        // 調用流式 LLM
+        const result = await chatWithLLMStream(
+          transcribedText,
+          history,
+          {
+            emotion: emotion,
+            isVoice: true,
+            enableTags: true,
+            userIdentity: session.userIdentity,
+            userName: session.userName,
+          },
+          // onChunk 回調：發送增量文字
+          (chunk) => {
+            // 檢查是否被打斷
+            if (session.isInterrupted) {
+              return;
+            }
+
+            // 發送增量文字片段
+            this.sendMessage(session, {
+              type: "llm_stream_chunk",
+              data: {
+                text: chunk.fullText,
+                delta: chunk.delta,
+                fullText: chunk.fullText,
+                tags: chunk.tags || [],
+              },
+            });
+          }
+        );
+
+        // 檢查是否被打斷
+        if (session.isInterrupted) {
+          console.log(`⏹️  會話 ${session.id} 在 LLM 處理期間被打斷`);
+          session.setState(SessionState.IDLE);
+          return;
+        }
+
+        finalReply = result.reply;
+        finalTags = result.tags || [];
+      }
+
+      // 發送 LLM 結束消息
+      const toneTag = getToneTag(finalTags);
+      this.sendMessage(session, {
+        type: "llm_stream_end",
+        data: {
+          fullText: finalReply,
+          tags: finalTags,
+          toneTag: toneTag,
+          emotion: emotion,
+          routingType: routingType,
+        },
+      });
+
+      // 更新會話狀態和歷史
+      session.currentLLMResponse = finalReply;
+      session.currentTags = finalTags;
+      session.addToHistory("user", transcribedText);
+      session.addToHistory("assistant", finalReply);
+
+      // 狀態保持為 THINKING，等待 TTS 處理（Phase 4）
+      // TODO: Phase 4 - 觸發 TTS 處理
+
+    } catch (error) {
+      console.error(`❌ LLM 流式處理失敗 (${session.id}):`, error);
+
+      // 重置狀態
+      session.setState(SessionState.IDLE);
+
+      // 發送錯誤消息
+      this.sendError(
+        session,
+        error.message || "LLM 處理失敗",
+        "LLM_ERROR"
       );
     }
   }
