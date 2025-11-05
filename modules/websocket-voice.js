@@ -545,6 +545,7 @@ export class VoiceWebSocketServer {
       console.log(`🔊 開始 TTS 流式處理 (${session.id}): "${text.substring(0, 50)}..."`);
 
       // 調用流式 TTS
+      const ttsStartTime = Date.now();
       const result = await synthesizeSpeechCartesiaStream(
         text,
         {

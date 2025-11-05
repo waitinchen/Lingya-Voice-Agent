@@ -675,6 +675,7 @@
         let currentStreamingMessage = null; // 當前正在流式顯示的消息元素
         let currentStreamingAudio = null; // 當前正在流式播放的音頻對象
         let ttsAudioChunks = []; // TTS 音頻片段緩衝區
+        let llmStreamTimeout = null; // LLM 流式處理超時計時器
         
         // 初始化 WebSocket 連接
         function initWebSocket() {
@@ -774,6 +775,19 @@
                     if (!currentStreamingMessage) {
                         currentStreamingMessage = addThinkingMessage();
                     }
+                    // 設置超時：如果 30 秒內沒有收到 llm_stream_end，自動清除並顯示錯誤
+                    if (llmStreamTimeout) clearTimeout(llmStreamTimeout);
+                    llmStreamTimeout = setTimeout(() => {
+                        if (currentStreamingMessage && currentStreamingMessage.hasAttribute('data-thinking')) {
+                            console.warn('⚠️ LLM 流式處理超時（30秒），清除思考動畫');
+                            removeThinkingMessage();
+                            currentStreamingMessage = null;
+                            addMessage('assistant', '抱歉，響應超時，請稍後再試 😅');
+                            isVoiceGenerating = false;
+                            setInputEnabled(true);
+                            hideInterruptButton();
+                        }
+                    }, 30000); // 30 秒超時
                     break;
                     
                 case 'llm_stream_chunk':
@@ -799,6 +813,11 @@
                     
                 case 'llm_stream_end':
                     // LLM 生成完成（更新消息，添加 toneTag）
+                    // 清除超時計時器
+                    if (llmStreamTimeout) {
+                        clearTimeout(llmStreamTimeout);
+                        llmStreamTimeout = null;
+                    }
                     if (currentStreamingMessage && msg.data?.fullText) {
                         // 移除思考動畫（如果存在）
                         if (currentStreamingMessage.hasAttribute('data-thinking')) {
@@ -939,7 +958,20 @@
                     
                 case 'error':
                     // 錯誤消息
+                    // 清除超時計時器
+                    if (llmStreamTimeout) {
+                        clearTimeout(llmStreamTimeout);
+                        llmStreamTimeout = null;
+                    }
                     console.error(`❌ WebSocket 錯誤: ${msg.error?.code} - ${msg.error?.message}`);
+                    
+                    // 如果有思考動畫，移除並顯示錯誤消息
+                    if (currentStreamingMessage && currentStreamingMessage.hasAttribute('data-thinking')) {
+                        removeThinkingMessage();
+                        currentStreamingMessage = null;
+                        addMessage('assistant', `抱歉，發生錯誤：${msg.error?.message || '未知錯誤'} 😅`);
+                    }
+                    
                     setStatus(`錯誤: ${msg.error?.message || '未知錯誤'}`);
                     setTimeout(() => setStatus(''), 3000);
                     isVoiceGenerating = false;
