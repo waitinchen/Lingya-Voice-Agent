@@ -391,15 +391,23 @@ export class VoiceWebSocketServer {
           });
 
           // 發送結束消息
+          // 確保 finalReply 不是 undefined
+          if (!finalReply) {
+            console.error(`❌ Prompt Routing 回應為空 (${session.id})`);
+            this.sendError(session, "Prompt Routing 回應為空", "ROUTING_EMPTY_RESPONSE");
+            session.setState(SessionState.IDLE);
+            return;
+          }
+          
           const toneTag = getToneTag(finalTags);
           this.sendMessage(session, {
             type: "llm_stream_end",
             data: {
-              fullText: finalReply,
-              tags: finalTags,
-              toneTag: toneTag,
-              emotion: emotion,
-              routingType: routingType,
+              fullText: finalReply || "", // 確保不是 undefined
+              tags: finalTags || [],
+              toneTag: toneTag || null,
+              emotion: emotion || null,
+              routingType: routingType || "pool",
             },
           });
 
@@ -471,15 +479,23 @@ export class VoiceWebSocketServer {
       }
 
       // 發送 LLM 結束消息
+      // 確保 finalReply 不是 undefined
+      if (!finalReply) {
+        console.error(`❌ finalReply 為空 (${session.id})，無法發送 llm_stream_end`);
+        this.sendError(session, "LLM 回應為空", "LLM_EMPTY_RESPONSE");
+        session.setState(SessionState.IDLE);
+        return;
+      }
+      
       const toneTag = getToneTag(finalTags);
       this.sendMessage(session, {
         type: "llm_stream_end",
         data: {
-          fullText: finalReply,
-          tags: finalTags,
-          toneTag: toneTag,
-          emotion: emotion,
-          routingType: routingType,
+          fullText: finalReply || "", // 確保不是 undefined
+          tags: finalTags || [],
+          toneTag: toneTag || null,
+          emotion: emotion || null,
+          routingType: routingType || "normal",
         },
       });
 

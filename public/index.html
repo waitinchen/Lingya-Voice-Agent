@@ -747,6 +747,12 @@
         function handleWSMessage(msg) {
             console.log(`📥 收到 WebSocket 消息: ${msg.type}`, msg);
             
+            // 調試：檢查消息格式
+            if (!msg || !msg.type) {
+                console.error('❌ 收到無效的 WebSocket 消息:', msg);
+                return;
+            }
+            
             switch (msg.type) {
                 case 'connected':
                     wsSessionId = msg.data?.sessionId;
@@ -818,7 +824,32 @@
                         clearTimeout(llmStreamTimeout);
                         llmStreamTimeout = null;
                     }
-                    if (currentStreamingMessage && msg.data?.fullText) {
+                    
+                    // 調試：檢查數據完整性
+                    if (!msg.data) {
+                        console.error('❌ llm_stream_end 消息缺少 data 字段:', msg);
+                        if (currentStreamingMessage) {
+                            const contentEl = currentStreamingMessage.querySelector('.message-content');
+                            if (contentEl) {
+                                contentEl.textContent = '抱歉，收到無效的響應數據 😅';
+                            }
+                        }
+                        break;
+                    }
+                    
+                    if (!msg.data.fullText) {
+                        console.error('❌ llm_stream_end 消息缺少 fullText 字段:', msg);
+                        console.error('   收到的 data:', msg.data);
+                        if (currentStreamingMessage) {
+                            const contentEl = currentStreamingMessage.querySelector('.message-content');
+                            if (contentEl) {
+                                contentEl.textContent = '抱歉，響應內容為空 😅';
+                            }
+                        }
+                        break;
+                    }
+                    
+                    if (currentStreamingMessage && msg.data.fullText) {
                         // 移除思考動畫（如果存在）
                         if (currentStreamingMessage.hasAttribute('data-thinking')) {
                             currentStreamingMessage.removeAttribute('data-thinking');
