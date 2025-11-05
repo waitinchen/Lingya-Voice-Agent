@@ -1325,8 +1325,10 @@
                     let toneTagEmoji = null;
                     if (toneTagEmojiBase64) {
                         try {
-                            // 解碼 Base64 為 emoji
-                            toneTagEmoji = Buffer.from(toneTagEmojiBase64, 'base64').toString('utf-8');
+                            // 解碼 Base64 為 emoji（瀏覽器環境）
+                            const decoded = atob(toneTagEmojiBase64);
+                            // 將解碼後的字符串轉換為 emoji
+                            toneTagEmoji = decodeURIComponent(escape(decoded));
                         } catch (e) {
                             console.warn('解碼 emoji 失敗，使用默認值:', e);
                             toneTagEmoji = '🌸';
