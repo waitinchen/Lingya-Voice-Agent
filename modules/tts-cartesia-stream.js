@@ -37,7 +37,21 @@ async function getClient() {
  */
 export async function synthesizeSpeechCartesiaStream(text, options = {}, onChunk = null) {
   try {
-    const { tags = [], emotion, abortSignal } = options;
+    const { tags = [], emotion, abortSignal, personaId = "RONG-001" } = options;
+    
+    // 🎭 Step 1: 語音轉譯層 - 將 LLM 文字轉換為口語化表達
+    let spokenText = text;
+    try {
+      const { rewriteForSpeech } = await import("./speech-layer/rewriteForSpeech.js");
+      spokenText = rewriteForSpeech(text, personaId, {
+        emotionTags: tags,
+      });
+      console.log(`🎭 語音轉譯完成: "${text.substring(0, 50)}..." → "${spokenText.substring(0, 50)}..."`);
+    } catch (rewriteError) {
+      console.warn("⚠️ 語音轉譯失敗，使用原始文本:", rewriteError.message);
+      // 如果轉譯失敗，繼續使用原始文本
+      spokenText = text;
+    }
     
     // 導入情緒處理模組
     const { applyEmotion } = await import("../helpers/emotion.js");
@@ -56,9 +70,9 @@ export async function synthesizeSpeechCartesiaStream(text, options = {}, onChunk
       }
     }
     
-    // 應用情緒標籤（文字層處理）
+    // 應用情緒標籤（文字層處理）- 使用轉譯後的文本
     const { script, speed, volume } = applyEmotion({
-      text,
+      text: spokenText, // 使用轉譯後的文本
       tags: finalTags,
     });
 

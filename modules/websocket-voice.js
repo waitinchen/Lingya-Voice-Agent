@@ -544,7 +544,7 @@ export class VoiceWebSocketServer {
     try {
       console.log(`🔊 開始 TTS 流式處理 (${session.id}): "${text.substring(0, 50)}..."`);
 
-      // 調用流式 TTS
+      // 調用流式 TTS（已內含語音轉譯層）
       const ttsStartTime = Date.now();
       const result = await synthesizeSpeechCartesiaStream(
         text,
@@ -552,6 +552,7 @@ export class VoiceWebSocketServer {
           tags: tags,
           emotion: emotion,
           abortSignal: abortSignal, // 傳遞 abort signal
+          personaId: "RONG-001", // 指定角色 ID 用於語音轉譯
         },
         // onChunk 回調：發送音頻片段
         (chunkData) => {

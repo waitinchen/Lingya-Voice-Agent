@@ -158,7 +158,20 @@ export async function synthesizeSpeechCartesia(
   options = {}
 ) {
   try {
-    const { tags = [], emotion } = options;
+    const { tags = [], emotion, personaId = "RONG-001" } = options;
+    
+    // 🎭 Step 1: 語音轉譯層 - 將 LLM 文字轉換為口語化表達
+    let spokenText = text;
+    try {
+      const { rewriteForSpeech } = await import("./speech-layer/rewriteForSpeech.js");
+      spokenText = rewriteForSpeech(text, personaId, {
+        emotionTags: tags,
+      });
+      console.log(`🎭 語音轉譯完成: "${text.substring(0, 50)}..." → "${spokenText.substring(0, 50)}..."`);
+    } catch (rewriteError) {
+      console.warn("⚠️ 語音轉譯失敗，使用原始文本:", rewriteError.message);
+      spokenText = text;
+    }
     
     // 導入情緒處理模組
     const { applyEmotion } = await import("../helpers/emotion.js");
@@ -177,9 +190,9 @@ export async function synthesizeSpeechCartesia(
       }
     }
     
-    // 應用情緒標籤（文字層處理）
+    // 應用情緒標籤（文字層處理）- 使用轉譯後的文本
     const { script, speed, volume } = applyEmotion({
-      text,
+      text: spokenText, // 使用轉譯後的文本
       tags: finalTags,
     });
 
@@ -296,7 +309,20 @@ export async function synthesizeSpeechCartesiaToBuffer(text, options = {}) {
     // 注意：CARTESIA_VOICE_ID 不是必需的，因為我們可能使用 VOICE_MAP 中的 VoiceID
     // 但如果既沒有環境變數也沒有匹配的標籤，會使用 DEFAULT_VOICE
     
-    const { tags = [], emotion } = options;
+    const { tags = [], emotion, personaId = "RONG-001" } = options;
+    
+    // 🎭 Step 1: 語音轉譯層 - 將 LLM 文字轉換為口語化表達
+    let spokenText = text;
+    try {
+      const { rewriteForSpeech } = await import("./speech-layer/rewriteForSpeech.js");
+      spokenText = rewriteForSpeech(text, personaId, {
+        emotionTags: tags,
+      });
+      console.log(`🎭 語音轉譯完成: "${text.substring(0, 50)}..." → "${spokenText.substring(0, 50)}..."`);
+    } catch (rewriteError) {
+      console.warn("⚠️ 語音轉譯失敗，使用原始文本:", rewriteError.message);
+      spokenText = text;
+    }
     
     // 導入情緒處理模組
     const { applyEmotion } = await import("../helpers/emotion.js");
@@ -315,9 +341,9 @@ export async function synthesizeSpeechCartesiaToBuffer(text, options = {}) {
       }
     }
     
-    // 應用情緒標籤（文字層處理）
+    // 應用情緒標籤（文字層處理）- 使用轉譯後的文本
     const { script, speed, volume, sfx, pauses } = applyEmotion({
-      text,
+      text: spokenText, // 使用轉譯後的文本
       tags: finalTags,
     });
     
