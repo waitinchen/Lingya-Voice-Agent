@@ -2,16 +2,27 @@
 
 ## 新 API Key
 
+**用戶提供的 Key：**
 ```
 sk_car_oKdwNrwqmegsmQF3AeycKq
 ```
+
+**Railway 中顯示的 Key：**
+```
+sk_car_oKdwNrwqmegsmQF3Aeyckq
+```
+
+**⚠️ 重要：** Railway 中的 Key 最後是 `eyckq`（小寫 k），而用戶提供的 Key 是 `eycKq`（大寫 K）。
+
+**請確認：**
+1. 在 Cartesia Dashboard 中，這個 Key 的完整值是什麼？
+2. 如果 Dashboard 中是大寫 `K`（`eycKq`），請更新 Railway 中的值
+3. 如果 Dashboard 中是小寫 `k`（`eyckq`），則當前設置正確
 
 **驗證結果：**
 - ✅ 格式正確（以 `sk_car_` 開頭）
 - ✅ 字符有效
 - ⚠️ 長度：29 字符（可能稍短，但可能仍然有效）
-
-**注意：** 如果這個 Key 在 Cartesia Dashboard 中顯示的完整值更長，請使用完整的值。
 
 ## 更新步驟
 
