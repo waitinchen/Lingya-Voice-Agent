@@ -221,8 +221,10 @@ app.post("/api/speak", async (req, res) => {
     const toneTag = getToneTag(finalTags);
 
     // 設置 toneTag 相關 Header（供前端使用）
-    res.setHeader("X-Tone-Tag-Emoji", toneTag.emoji);
-    res.setHeader("X-Tone-Tag-Label", toneTag.label);
+    // 將 emoji 編碼為 Base64，避免 HTTP header 錯誤
+    const emojiBase64 = Buffer.from(toneTag.emoji).toString('base64');
+    res.setHeader("X-Tone-Tag-Emoji", emojiBase64); // 語氣圖標（Base64 編碼）
+    res.setHeader("X-Tone-Tag-Label", toneTag.label); // 語氣標籤
     res.setHeader("X-Tags", finalTags.join(","));
 
     // 返回音檔（WAV 格式）
@@ -313,7 +315,9 @@ app.post("/api/speak-stream", async (req, res) => {
     res.setHeader("Content-Type", "audio/wav");
     res.setHeader("Content-Length", audioBuffer.length);
     res.setHeader("X-Tags", finalTags.join(",")); // 方便前端知道使用了哪些標籤
-    res.setHeader("X-Tone-Tag-Emoji", toneTag.emoji); // 語氣圖標
+    // 將 emoji 編碼為 Base64，避免 HTTP header 錯誤
+    const emojiBase64 = Buffer.from(toneTag.emoji).toString('base64');
+    res.setHeader("X-Tone-Tag-Emoji", emojiBase64); // 語氣圖標（Base64 編碼）
     res.setHeader("X-Tone-Tag-Label", toneTag.label); // 語氣標籤
     res.send(audioBuffer);
   } catch (error) {
@@ -571,7 +575,9 @@ app.post("/api/preview", async (req, res) => {
     res.setHeader("Content-Type", "audio/wav");
     res.setHeader("Content-Length", audioBuffer.length);
     res.setHeader("X-Tags", tags.join(",")); // 方便前端知道使用了哪些標籤
-    res.setHeader("X-Tone-Tag-Emoji", toneTag.emoji); // 語氣圖標
+    // 將 emoji 編碼為 Base64，避免 HTTP header 錯誤
+    const emojiBase64 = Buffer.from(toneTag.emoji).toString('base64');
+    res.setHeader("X-Tone-Tag-Emoji", emojiBase64); // 語氣圖標（Base64 編碼）
     res.setHeader("X-Tone-Tag-Label", toneTag.label); // 語氣標籤
     res.send(audioBuffer);
   } catch (error) {
