@@ -1061,7 +1061,7 @@
                         console.warn('⚠️ 未收到转录文字');
                     }
                     
-                    // 移除思考動畫，顯示花小軟回應（包含 toneTag）
+                    // 移除思考動畫，顯示黃蓉回應（包含 toneTag）
                     removeThinkingMessage();
                     const messageElement = addMessage('assistant', data.text, true, data.audio, data.toneTag || null);
                     
@@ -1145,7 +1145,7 @@
                         document.body.style.background = 'linear-gradient(135deg, #e0e0e0 0%, #f5f5f5 100%)';
                         if (!currentUserIdentity || currentUserIdentity !== 'dad') {
                             currentUserIdentity = 'other';
-                            console.log('🌎 檢測到陌生人模式，花小軟想回家找老爸');
+                            console.log('🌎 檢測到陌生人模式，黃蓉進入戒備狀態');
                         }
                     }
                 } else {
