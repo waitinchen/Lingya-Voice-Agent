@@ -33,18 +33,32 @@ function loadPersonaConfig(personaId) {
   }
 
   try {
+    // 使用 process.cwd() 作为基准路径，确保在 Railway 等环境中也能找到配置文件
     const configPath = path.join(
-      __dirname,
+      process.cwd(),
+      "modules",
+      "speech-layer",
       "personaStyleConfigs",
       `${personaId}.json`
     );
 
-    if (!fs.existsSync(configPath)) {
-      console.warn(`⚠️ 找不到角色配置: ${configPath}`);
-      return null;
+    // 如果上面的路径不存在，尝试使用 __dirname（本地开发环境）
+    let finalConfigPath = configPath;
+    if (!fs.existsSync(finalConfigPath)) {
+      const altPath = path.join(
+        __dirname,
+        "personaStyleConfigs",
+        `${personaId}.json`
+      );
+      if (fs.existsSync(altPath)) {
+        finalConfigPath = altPath;
+      } else {
+        console.warn(`⚠️ 找不到角色配置: ${configPath} 或 ${altPath}`);
+        return null;
+      }
     }
 
-    const configContent = fs.readFileSync(configPath, "utf-8");
+    const configContent = fs.readFileSync(finalConfigPath, "utf-8");
     const config = JSON.parse(configContent);
 
     // 緩存配置
@@ -54,6 +68,7 @@ function loadPersonaConfig(personaId) {
     return config;
   } catch (error) {
     console.error(`❌ 載入角色配置失敗 (${personaId}):`, error);
+    console.error(`   錯誤堆疊:`, error.stack);
     return null;
   }
 }
@@ -90,20 +105,21 @@ function getEmotionStyle(config, emotionTags = []) {
  * @returns {string} 轉譯後的語音文本
  */
 export function rewriteForSpeech(text, personaId = "RONG-001", options = {}) {
-  if (!text || typeof text !== "string") {
-    console.warn("⚠️ rewriteForSpeech: 文本為空或無效");
-    return text || "";
-  }
+  try {
+    if (!text || typeof text !== "string") {
+      console.warn("⚠️ rewriteForSpeech: 文本為空或無效");
+      return text || "";
+    }
 
-  const { emotionTags = [] } = options;
+    const { emotionTags = [] } = options;
 
-  // 載入角色配置
-  const config = loadPersonaConfig(personaId);
+    // 載入角色配置
+    const config = loadPersonaConfig(personaId);
 
-  if (!config) {
-    // 如果沒有配置，只做基本的標點清理
-    return cleanExcessivePunctuation(text);
-  }
+    if (!config) {
+      // 如果沒有配置，只做基本的標點清理
+      return cleanExcessivePunctuation(text);
+    }
 
   // 檢查是否包含禁止短語
   if (containsForbiddenPhrase(text, config.forbiddenPhrases || [])) {
@@ -146,12 +162,19 @@ export function rewriteForSpeech(text, personaId = "RONG-001", options = {}) {
     }
   }
 
-  // Step 5: 最終清理（移除多餘空格）
-  output = output.trim().replace(/\s+/g, " ");
+    // Step 5: 最終清理（移除多餘空格）
+    output = output.trim().replace(/\s+/g, " ");
 
-  console.log(`🎭 語音轉譯: "${text.substring(0, 30)}..." → "${output.substring(0, 30)}..."`);
-  
-  return output;
+    console.log(`🎭 語音轉譯: "${text.substring(0, 30)}..." → "${output.substring(0, 30)}..."`);
+    
+    return output;
+  } catch (error) {
+    // 如果轉譯過程發生任何錯誤，記錄並返回原始文本
+    console.error(`❌ 語音轉譯過程發生錯誤:`, error);
+    console.error(`   錯誤堆疊:`, error.stack);
+    console.warn(`⚠️ 使用原始文本，跳過轉譯`);
+    return text || "";
+  }
 }
 
 /**

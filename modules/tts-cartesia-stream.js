@@ -46,10 +46,15 @@ export async function synthesizeSpeechCartesiaStream(text, options = {}, onChunk
       spokenText = rewriteForSpeech(text, personaId, {
         emotionTags: tags,
       });
-      console.log(`🎭 語音轉譯完成: "${text.substring(0, 50)}..." → "${spokenText.substring(0, 50)}..."`);
+      if (spokenText && spokenText !== text) {
+        console.log(`🎭 語音轉譯完成: "${text.substring(0, 50)}..." → "${spokenText.substring(0, 50)}..."`);
+      }
     } catch (rewriteError) {
       console.warn("⚠️ 語音轉譯失敗，使用原始文本:", rewriteError.message);
-      // 如果轉譯失敗，繼續使用原始文本
+      if (rewriteError.stack) {
+        console.warn("   錯誤堆疊:", rewriteError.stack);
+      }
+      // 如果轉譯失敗，繼續使用原始文本（確保流程不被阻塞）
       spokenText = text;
     }
     
