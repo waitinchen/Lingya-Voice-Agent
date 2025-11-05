@@ -222,7 +222,9 @@ app.post("/api/speak", async (req, res) => {
 
     // 設置 toneTag 相關 Header（供前端使用）
     // 將 emoji 編碼為 Base64，避免 HTTP header 錯誤
-    const emojiBase64 = Buffer.from(toneTag.emoji).toString('base64');
+    // 使用 UTF-8 編碼確保 emoji 正確處理
+    const emojiBytes = Buffer.from(toneTag.emoji, 'utf-8');
+    const emojiBase64 = emojiBytes.toString('base64');
     res.setHeader("X-Tone-Tag-Emoji", emojiBase64); // 語氣圖標（Base64 編碼）
     res.setHeader("X-Tone-Tag-Label", toneTag.label); // 語氣標籤
     res.setHeader("X-Tags", finalTags.join(","));
@@ -316,7 +318,9 @@ app.post("/api/speak-stream", async (req, res) => {
     res.setHeader("Content-Length", audioBuffer.length);
     res.setHeader("X-Tags", finalTags.join(",")); // 方便前端知道使用了哪些標籤
     // 將 emoji 編碼為 Base64，避免 HTTP header 錯誤
-    const emojiBase64 = Buffer.from(toneTag.emoji).toString('base64');
+    // 使用 UTF-8 編碼確保 emoji 正確處理
+    const emojiBytes = Buffer.from(toneTag.emoji, 'utf-8');
+    const emojiBase64 = emojiBytes.toString('base64');
     res.setHeader("X-Tone-Tag-Emoji", emojiBase64); // 語氣圖標（Base64 編碼）
     res.setHeader("X-Tone-Tag-Label", toneTag.label); // 語氣標籤
     res.send(audioBuffer);
@@ -576,7 +580,9 @@ app.post("/api/preview", async (req, res) => {
     res.setHeader("Content-Length", audioBuffer.length);
     res.setHeader("X-Tags", tags.join(",")); // 方便前端知道使用了哪些標籤
     // 將 emoji 編碼為 Base64，避免 HTTP header 錯誤
-    const emojiBase64 = Buffer.from(toneTag.emoji).toString('base64');
+    // 使用 UTF-8 編碼確保 emoji 正確處理
+    const emojiBytes = Buffer.from(toneTag.emoji, 'utf-8');
+    const emojiBase64 = emojiBytes.toString('base64');
     res.setHeader("X-Tone-Tag-Emoji", emojiBase64); // 語氣圖標（Base64 編碼）
     res.setHeader("X-Tone-Tag-Label", toneTag.label); // 語氣標籤
     res.send(audioBuffer);
