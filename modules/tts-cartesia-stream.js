@@ -37,7 +37,7 @@ async function getClient() {
  */
 export async function synthesizeSpeechCartesiaStream(text, options = {}, onChunk = null) {
   try {
-    const { tags = [], emotion } = options;
+    const { tags = [], emotion, abortSignal } = options;
     
     // 導入情緒處理模組
     const { applyEmotion } = await import("../helpers/emotion.js");
@@ -103,6 +103,12 @@ export async function synthesizeSpeechCartesiaStream(text, options = {}, onChunk
     
     // 檢查響應類型並處理流
     if (Buffer.isBuffer(response)) {
+      // 檢查是否被中止（在處理 Buffer 之前）
+      if (abortSignal && abortSignal.aborted) {
+        console.log("⏹️  TTS 流式處理被中止（Buffer 模式）");
+        throw new Error("TTS stream aborted");
+      }
+      
       // 如果是 Buffer，直接處理
       chunks.push(response);
       totalSize = response.length;
@@ -117,6 +123,12 @@ export async function synthesizeSpeechCartesiaStream(text, options = {}, onChunk
         });
       }
     } else if (response instanceof Uint8Array) {
+      // 檢查是否被中止（在處理 Uint8Array 之前）
+      if (abortSignal && abortSignal.aborted) {
+        console.log("⏹️  TTS 流式處理被中止（Uint8Array 模式）");
+        throw new Error("TTS stream aborted");
+      }
+      
       // 如果是 Uint8Array，轉換為 Buffer
       const buffer = Buffer.from(response);
       chunks.push(buffer);
@@ -135,6 +147,12 @@ export async function synthesizeSpeechCartesiaStream(text, options = {}, onChunk
       console.log(`📦 處理流式響應...`);
       
       for await (const chunk of response) {
+        // 檢查是否被中止
+        if (abortSignal && abortSignal.aborted) {
+          console.log("⏹️  TTS 流式處理被中止");
+          throw new Error("TTS stream aborted");
+        }
+        
         let audioChunk;
         
         if (Buffer.isBuffer(chunk)) {
@@ -172,6 +190,12 @@ export async function synthesizeSpeechCartesiaStream(text, options = {}, onChunk
         });
       }
     } else if (response.arrayBuffer) {
+      // 檢查是否被中止（在處理 ArrayBuffer 之前）
+      if (abortSignal && abortSignal.aborted) {
+        console.log("⏹️  TTS 流式處理被中止（ArrayBuffer 模式）");
+        throw new Error("TTS stream aborted");
+      }
+      
       // 處理 ArrayBuffer
       const buffer = Buffer.from(await response.arrayBuffer());
       chunks.push(buffer);
@@ -190,6 +214,13 @@ export async function synthesizeSpeechCartesiaStream(text, options = {}, onChunk
       const reader = response.getReader();
       try {
         while (true) {
+          // 檢查是否被中止
+          if (abortSignal && abortSignal.aborted) {
+            console.log("⏹️  TTS 流式處理被中止");
+            reader.cancel(); // 取消讀取
+            throw new Error("TTS stream aborted");
+          }
+          
           const { done, value } = await reader.read();
           if (done) break;
           
@@ -244,6 +275,11 @@ export async function synthesizeSpeechCartesiaStream(text, options = {}, onChunk
     };
     
   } catch (error) {
+    // 如果是中止錯誤，不記錄為錯誤
+    if (error.name === "AbortError" || error.message === "TTS stream aborted") {
+      console.log(`⏹️  TTS 流式處理被中止`);
+      throw error;
+    }
     console.error("❌ Cartesia TTS 流式處理錯誤：", error.message);
     if (error.response) {
       console.error("   錯誤詳情:", error.response);

@@ -208,7 +208,7 @@ export async function chatWithLLMStream(prompt, conversationHistory = [], option
       SYSTEM_PROMPT = await loadSystemPrompt();
     }
     
-    const { emotion, enableTags = true, userIdentity, userName } = options;
+    const { emotion, enableTags = true, userIdentity, userName, abortSignal } = options;
     const { messages, identityTags } = buildMessages(prompt, conversationHistory, { emotion, userIdentity, userName });
     
     const temperature = emotion === "開心" ? 0.9 : emotion === "難過" ? 0.7 : 0.8;
@@ -236,9 +236,16 @@ export async function chatWithLLMStream(prompt, conversationHistory = [], option
         temperature: temperature,
         system: systemPrompt,
         messages: conversationMessages,
+        abortSignal: abortSignal, // 支持中止
       });
 
       for await (const event of stream) {
+        // 檢查是否被中止
+        if (abortSignal && abortSignal.aborted) {
+          console.log("⏹️  LLM 流式處理被中止");
+          throw new Error("LLM stream aborted");
+        }
+        
         if (event.type === "content_block_delta") {
           const delta = event.delta;
           if (delta.type === "text") {
@@ -284,9 +291,16 @@ export async function chatWithLLMStream(prompt, conversationHistory = [], option
         temperature: temperature,
         max_tokens: 300,
         stream: true,
+        signal: abortSignal, // 支持中止
       });
 
       for await (const chunk of stream) {
+        // 檢查是否被中止
+        if (abortSignal && abortSignal.aborted) {
+          console.log("⏹️  LLM 流式處理被中止");
+          throw new Error("LLM stream aborted");
+        }
+        
         const delta = chunk.choices[0]?.delta?.content;
         if (delta) {
           fullText += delta;
@@ -350,6 +364,11 @@ export async function chatWithLLMStream(prompt, conversationHistory = [], option
     };
     
   } catch (error) {
+    // 如果是中止錯誤，不記錄為錯誤
+    if (error.name === "AbortError" || error.message === "LLM stream aborted") {
+      console.log(`⏹️  LLM 流式處理被中止`);
+      throw error;
+    }
     console.error(`❌ LLM 流式處理失敗:`, error);
     throw error;
   }

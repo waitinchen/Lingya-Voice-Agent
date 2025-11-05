@@ -11,6 +11,7 @@ import { chatWithLLMStream } from "./llm-stream.js";
 import { processPromptRouting } from "./prompt-routing.js";
 import { getToneTag } from "./tts-cartesia.js";
 import { synthesizeSpeechCartesiaStream } from "./tts-cartesia-stream.js";
+import { getPerformanceMonitor } from "./performance-monitor.js";
 
 /**
  * WebSocket 語音服務器類
@@ -63,6 +64,10 @@ export class VoiceWebSocketServer {
     const session = new VoiceSession(ws);
     this.sessions.set(session.id, session);
     
+    // 記錄 WebSocket 連接
+    const performanceMonitor = getPerformanceMonitor();
+    performanceMonitor.recordWebSocketConnection();
+    
     console.log(`📝 創建新會話: ${session.id} (總會話數: ${this.sessions.size})`);
 
     // 設置消息處理
@@ -81,11 +86,17 @@ export class VoiceWebSocketServer {
       console.log(`🔌 連接關閉: ${session.id} (code: ${code}, reason: ${reason})`);
       this.sessions.delete(session.id);
       session.close("client_disconnect");
+      
+      // 記錄 WebSocket 斷開
+      const performanceMonitor = getPerformanceMonitor();
+      performanceMonitor.recordWebSocketDisconnect();
     });
 
     // 設置錯誤處理
     ws.on("error", (error) => {
       console.error(`❌ WebSocket 錯誤 (${session.id}):`, error);
+      const performanceMonitor = getPerformanceMonitor();
+      performanceMonitor.recordWebSocketError();
       this.sessions.delete(session.id);
       session.close("error");
     });
@@ -246,9 +257,13 @@ export class VoiceWebSocketServer {
 
       // 進行語音識別
       console.log(`🎤 開始語音識別 (${session.id})...`);
+      const sttStartTime = Date.now();
       const transcribedText = await transcribeFromBase64(audioBase64, {
         language: session.language,
       });
+      const sttDuration = Date.now() - sttStartTime;
+      const performanceMonitor = getPerformanceMonitor();
+      performanceMonitor.recordSTT(sttDuration, !!transcribedText);
 
       // 檢查是否被打斷（在 STT 處理期間）
       if (session.isInterrupted) {
@@ -409,6 +424,7 @@ export class VoiceWebSocketServer {
         const history = session.history || [];
 
         // 調用流式 LLM
+        const llmStartTime = Date.now();
         const result = await chatWithLLMStream(
           transcribedText,
           history,
@@ -439,6 +455,9 @@ export class VoiceWebSocketServer {
             });
           }
         );
+        const llmDuration = Date.now() - llmStartTime;
+        const performanceMonitor = getPerformanceMonitor();
+        performanceMonitor.recordLLM(llmDuration, !!result && !!result.reply);
 
         // 檢查是否被打斷
         if (session.isInterrupted) {
@@ -563,6 +582,9 @@ export class VoiceWebSocketServer {
           );
         }
       );
+      const ttsDuration = Date.now() - ttsStartTime;
+      const performanceMonitor = getPerformanceMonitor();
+      performanceMonitor.recordTTS(ttsDuration, !!result);
 
       // 檢查是否被打斷
       if (session.isInterrupted) {
@@ -704,10 +726,19 @@ export class VoiceWebSocketServer {
         timestamp: message.timestamp || Date.now(),
       };
 
-      session.ws.send(JSON.stringify(messageWithId));
+      const json = JSON.stringify(messageWithId);
+      const messageSize = Buffer.byteLength(json, 'utf8');
+      
+      // 記錄 WebSocket 消息
+      const performanceMonitor = getPerformanceMonitor();
+      performanceMonitor.recordWebSocketMessage(messageSize);
+      
+      session.ws.send(json);
       return true;
     } catch (error) {
       console.error(`❌ 發送消息失敗 (${session.id}):`, error);
+      const performanceMonitor = getPerformanceMonitor();
+      performanceMonitor.recordWebSocketError();
       return false;
     }
   }

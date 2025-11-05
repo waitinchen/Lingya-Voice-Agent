@@ -44,6 +44,9 @@ export class VoiceSession {
     this.currentLLMResponse = "";
     this.currentTags = [];
     
+    // 打斷控制（AbortController）
+    this.abortController = null;
+    
     // 會話超時設置（30 分鐘）
     this.timeout = 30 * 60 * 1000; // 30 分鐘
     this.timeoutTimer = null;
@@ -146,10 +149,40 @@ export class VoiceSession {
   }
 
   /**
+   * 創建新的 AbortController（用於中止當前操作）
+   */
+  createAbortController() {
+    // 如果已經存在，先中止舊的
+    if (this.abortController) {
+      this.abortController.abort();
+    }
+    
+    this.abortController = new AbortController();
+    return this.abortController;
+  }
+
+  /**
+   * 獲取當前的 AbortSignal
+   */
+  getAbortSignal() {
+    if (!this.abortController) {
+      this.createAbortController();
+    }
+    return this.abortController.signal;
+  }
+
+  /**
    * 打斷當前處理
    */
   interrupt(reason = "user_interrupt") {
     this.isInterrupted = true;
+    
+    // 中止當前的 AbortController
+    if (this.abortController && !this.abortController.signal.aborted) {
+      console.log(`⏹️  中止當前的 API 請求 (${this.id})`);
+      this.abortController.abort(reason);
+    }
+    
     this.updateActivity();
     console.log(`⏹️  會話 ${this.id} 被打斷: ${reason}`);
   }
@@ -159,6 +192,10 @@ export class VoiceSession {
    */
   resetInterrupt() {
     this.isInterrupted = false;
+    
+    // 創建新的 AbortController（為下一次操作準備）
+    this.abortController = null;
+    
     this.updateActivity();
   }
 
@@ -166,6 +203,11 @@ export class VoiceSession {
    * 重置會話（清除歷史和狀態）
    */
   reset(clearHistory = true) {
+    // 中止當前的操作
+    if (this.abortController && !this.abortController.signal.aborted) {
+      this.abortController.abort("reset");
+    }
+    
     if (clearHistory) {
       this.history = [];
     }
@@ -174,6 +216,7 @@ export class VoiceSession {
     this.currentLLMResponse = "";
     this.currentTags = [];
     this.isInterrupted = false;
+    this.abortController = null;
     this.setState(SessionState.IDLE);
     this.updateActivity();
     console.log(`🔄 會話 ${this.id} 已重置`);

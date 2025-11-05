@@ -19,8 +19,12 @@ import { transcribeFromBase64 } from "./modules/stt.js";
 // 保留 OpenAI TTS 以便切換
 import { synthesizeSpeech, synthesizeSpeechToBuffer } from "./modules/tts.js";
 import { VoiceWebSocketServer } from "./modules/websocket-voice.js";
+import { getPerformanceMonitor } from "./modules/performance-monitor.js";
 
 dotenv.config();
+
+// 初始化性能監控
+const performanceMonitor = getPerformanceMonitor();
 
 const app = express();
 // 啟用 WebSocket 支持
@@ -80,11 +84,70 @@ const upload = multer({
   },
 });
 
+// 性能監控中間件（記錄所有 HTTP 請求）
+app.use((req, res, next) => {
+  const startTime = Date.now();
+  const endpoint = req.path;
+  
+  // 在響應完成時記錄指標
+  res.on("finish", () => {
+    const duration = Date.now() - startTime;
+    performanceMonitor.recordRequest(endpoint, res.statusCode, duration);
+  });
+  
+  next();
+});
+
 // 靜態文件服務（用於 ChatKit 界面）
 app.use(express.static("public"));
 
 // 根據環境變數決定使用哪個 TTS 提供商
 const TTS_PROVIDER = process.env.TTS_PROVIDER || "cartesia"; // 預設使用 Cartesia
+
+// 健康檢查端點
+app.get("/health", (_, res) => {
+  const healthStatus = {
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    websocket: wsServer ? "enabled" : "disabled",
+    environment: process.env.NODE_ENV || "development",
+    version: "0.1.0",
+  };
+  
+  // 如果 WebSocket 服務器可用，添加統計信息
+  if (wsServer) {
+    try {
+      const stats = wsServer.getStats();
+      healthStatus.websocket_stats = stats;
+    } catch (error) {
+      healthStatus.websocket_stats = { error: "無法獲取統計信息" };
+    }
+  }
+  
+  res.json(healthStatus);
+});
+
+// 性能統計端點
+app.get("/api/stats", (_, res) => {
+  try {
+    const metrics = performanceMonitor.getMetrics();
+    
+    // 如果 WebSocket 服務器可用，添加詳細統計
+    if (wsServer) {
+      try {
+        metrics.websocket.detailed = wsServer.getStats();
+      } catch (error) {
+        metrics.websocket.detailed = { error: "無法獲取詳細統計" };
+      }
+    }
+    
+    res.json(metrics);
+  } catch (error) {
+    console.error("❌ 獲取性能統計失敗:", error);
+    res.status(500).json({ error: "無法獲取性能統計" });
+  }
+});
 
 // 根路由 - 返回聊天界面（如果靜態文件服務沒匹配到）
 app.get("/", (_, res) => {
@@ -173,6 +236,9 @@ app.post("/api/chat", async (req, res) => {
     const { getToneTag } = await import("./modules/tts-cartesia.js");
     const toneTag = getToneTag(finalTags);
 
+    const duration = Date.now() - startTime;
+    performanceMonitor.recordRequest("/api/chat", 200, duration);
+    
     res.json({
       reply: finalReply,
       tags: finalTags, // Step ③-B: 返回選擇的標籤
@@ -182,6 +248,9 @@ app.post("/api/chat", async (req, res) => {
       routingType: routingType, // 標記路由類型（用於調試）
     });
   } catch (error) {
+    const duration = Date.now() - startTime;
+    performanceMonitor.recordRequest("/api/chat", 500, duration);
+    performanceMonitor.recordLLM(0, false);
     console.error("❌ 處理請求失敗:", error);
     res.status(500).json({ error: error.message });
   }
@@ -251,10 +320,13 @@ app.post("/api/speak", async (req, res) => {
     }
 
     // 使用 Cartesia TTS 生成語音檔案（支持標籤）
+    const ttsStartTime = Date.now();
     const filePath = await synthesizeSpeechCartesia(text, null, {
       tags: finalTags,
       emotion,
     });
+    const ttsDuration = Date.now() - ttsStartTime;
+    performanceMonitor.recordTTS(ttsDuration, !!filePath);
 
     if (!filePath) {
       return res.status(500).json({ error: "TTS failed" });
@@ -800,7 +872,8 @@ try {
     console.log(`   🔊 語音合成: POST http://localhost:${PORT}/api/speak (Cartesia，支持自動推理標籤) 🎙️`);
     console.log(`   🎧 語氣預覽: POST http://localhost:${PORT}/api/preview (快速試聽語氣組合)`);
     console.log(`   🔮 聲音快取: GET http://localhost:${PORT}/api/preset/:name?text=... (預設語氣)`);
-    console.log(`   🎤 語音識別: POST http://localhost:${PORT}/api/transcribe\n`);
+    console.log(`   🎤 語音識別: POST http://localhost:${PORT}/api/transcribe`);
+    console.log(`   💚 健康檢查: GET http://localhost:${PORT}/health (服務器狀態) 🆕\n`);
   });
 } catch (startError) {
   console.error("❌ 服務器啟動失敗:", startError);
