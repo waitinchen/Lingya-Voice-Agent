@@ -1200,14 +1200,34 @@
                 `;
             }
             
+            // 創建頭像元素
+            const avatarEl = document.createElement('div');
+            avatarEl.className = 'message-avatar';
+            
+            if (role === 'assistant') {
+                // 助手頭像：嘗試載入圖片
+                const img = new Image();
+                img.onload = () => {
+                    avatarEl.style.backgroundImage = `url('/images/huangrong-avatar.jpg')`;
+                };
+                img.onerror = () => {
+                    // 圖片載入失敗，顯示備用 emoji
+                    avatarEl.setAttribute('data-image-error', 'true');
+                    avatarEl.innerHTML = '🌸';
+                };
+                img.src = '/images/huangrong-avatar.jpg';
+            } else {
+                avatarEl.textContent = avatar;
+            }
+            
             messageEl.innerHTML = `
-                <div class="message-avatar">${role === 'user' ? avatar : ''}</div>
                 <div class="message-content">
                     ${text}
                     ${audioHtml}
                     ${toneTagHtml}
                 </div>
             `;
+            messageEl.insertBefore(avatarEl, messageEl.firstChild);
             
             messagesEl.appendChild(messageEl);
             messagesEl.scrollTop = messagesEl.scrollHeight;
