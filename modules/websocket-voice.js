@@ -10,6 +10,7 @@ import { mergeAudioChunks } from "./audio-processor.js";
 import { chatWithLLMStream } from "./llm-stream.js";
 import { processPromptRouting } from "./prompt-routing.js";
 import { getToneTag } from "./tts-cartesia.js";
+import { synthesizeSpeechCartesiaStream } from "./tts-cartesia-stream.js";
 
 /**
  * WebSocket 語音服務器類
@@ -445,8 +446,8 @@ export class VoiceWebSocketServer {
       session.addToHistory("user", transcribedText);
       session.addToHistory("assistant", finalReply);
 
-      // 狀態保持為 THINKING，等待 TTS 處理（Phase 4）
-      // TODO: Phase 4 - 觸發 TTS 處理
+      // Phase 4: 觸發 TTS 流式處理
+      await this.handleTTSStream(session, finalReply, finalTags, emotion);
 
     } catch (error) {
       console.error(`❌ LLM 流式處理失敗 (${session.id}):`, error);
@@ -459,6 +460,107 @@ export class VoiceWebSocketServer {
         session,
         error.message || "LLM 處理失敗",
         "LLM_ERROR"
+      );
+    }
+  }
+
+  /**
+   * 處理 TTS 流式處理
+   */
+  async handleTTSStream(session, text, tags, emotion) {
+    // 檢查是否被打斷
+    if (session.isInterrupted) {
+      console.log(`⏹️  會話 ${session.id} 已被打斷，取消 TTS 處理`);
+      session.setState(SessionState.IDLE);
+      return;
+    }
+
+    // 設置狀態為說話中
+    session.setState(SessionState.SPEAKING);
+
+    // 發送 TTS 開始消息
+    this.sendMessage(session, {
+      type: "tts_stream_start",
+      data: {
+        status: "synthesizing",
+        estimatedDuration: Math.ceil(text.length * 0.1) * 1000, // 粗略估計（100ms/字符）
+      },
+    });
+
+    try {
+      console.log(`🔊 開始 TTS 流式處理 (${session.id}): "${text.substring(0, 50)}..."`);
+
+      // 調用流式 TTS
+      const result = await synthesizeSpeechCartesiaStream(
+        text,
+        {
+          tags: tags,
+          emotion: emotion,
+        },
+        // onChunk 回調：發送音頻片段
+        (chunkData) => {
+          // 檢查是否被打斷
+          if (session.isInterrupted) {
+            return;
+          }
+
+          // 將音頻片段轉換為 Base64
+          const audioBase64 = chunkData.chunk.toString("base64");
+
+          // 發送音頻片段
+          this.sendMessage(session, {
+            type: "tts_stream_chunk",
+            data: {
+              audio: audioBase64,
+              format: "wav",
+              sequence: chunkData.chunkIndex,
+              isLast: chunkData.isLast,
+              chunkSize: chunkData.chunk.length,
+              totalSize: chunkData.totalSize,
+            },
+          });
+
+          console.log(
+            `   📦 發送 TTS 片段 ${chunkData.chunkIndex + 1} (${(chunkData.chunk.length / 1024).toFixed(2)} KB)${
+              chunkData.isLast ? " [最後]" : ""
+            }`
+          );
+        }
+      );
+
+      // 檢查是否被打斷
+      if (session.isInterrupted) {
+        console.log(`⏹️  會話 ${session.id} 在 TTS 處理期間被打斷`);
+        session.setState(SessionState.IDLE);
+        return;
+      }
+
+      // 發送 TTS 結束消息
+      this.sendMessage(session, {
+        type: "tts_stream_end",
+        data: {
+          totalChunks: result.chunkCount,
+          duration: Math.ceil((result.totalSize / 44100 / 2) * 1000), // 粗略估計（44.1kHz, 16-bit, 單聲道）
+          totalSize: result.totalSize,
+        },
+      });
+
+      console.log(`✅ TTS 流式處理完成 (${session.id}): ${result.chunkCount} 個片段，${(result.totalSize / 1024).toFixed(2)} KB`);
+
+      // 重置狀態為空閒
+      session.setState(SessionState.IDLE);
+
+    } catch (error) {
+      console.error(`❌ TTS 流式處理失敗 (${session.id}):`, error);
+
+      // 重置狀態
+      session.setState(SessionState.IDLE);
+
+      // 發送錯誤消息
+      this.sendError(
+        session,
+        error.message || "TTS 處理失敗",
+        "TTS_ERROR"
       );
     }
   }
