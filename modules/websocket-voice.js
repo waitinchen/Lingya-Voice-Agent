@@ -211,6 +211,17 @@ export class VoiceWebSocketServer {
   }
 
   /**
+   * 創建超時 Promise（用於超時保護）
+   */
+  createTimeoutPromise(timeoutMs, errorMessage) {
+    return new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(errorMessage || `操作超時（${timeoutMs}ms）`));
+      }, timeoutMs);
+    });
+  }
+
+  /**
    * 處理 audio_end 消息
    */
   async handleAudioEnd(session, msg) {
@@ -255,12 +266,15 @@ export class VoiceWebSocketServer {
       // 將 Buffer 轉換為 Base64
       const audioBase64 = mergedAudioBuffer.toString("base64");
 
-      // 進行語音識別
+      // 進行語音識別（添加 30 秒超時）
       console.log(`🎤 開始語音識別 (${session.id})...`);
       const sttStartTime = Date.now();
-      const transcribedText = await transcribeFromBase64(audioBase64, {
-        language: session.language,
-      });
+      const transcribedText = await Promise.race([
+        transcribeFromBase64(audioBase64, {
+          language: session.language,
+        }),
+        this.createTimeoutPromise(30000, "語音識別超時（30秒），請重試"),
+      ]);
       const sttDuration = Date.now() - sttStartTime;
       const performanceMonitor = getPerformanceMonitor();
       performanceMonitor.recordSTT(sttDuration, !!transcribedText);
@@ -431,7 +445,8 @@ export class VoiceWebSocketServer {
         // 獲取對話歷史
         const history = session.history || [];
 
-        // 調用流式 LLM
+        // 調用流式 LLM（不設置超時，讓 LLM 正常完成生成）
+        // 前端已有 30 秒超時保護，這裡讓 LLM 正常處理
         const llmStartTime = Date.now();
         const result = await chatWithLLMStream(
           transcribedText,
@@ -560,46 +575,49 @@ export class VoiceWebSocketServer {
     try {
       console.log(`🔊 開始 TTS 流式處理 (${session.id}): "${text.substring(0, 50)}..."`);
 
-      // 調用流式 TTS（已內含語音轉譯層）
+      // 調用流式 TTS（已內含語音轉譯層，添加 45 秒超時）
       const ttsStartTime = Date.now();
-      const result = await synthesizeSpeechCartesiaStream(
-        text,
-        {
-          tags: tags,
-          emotion: emotion,
-          abortSignal: abortSignal, // 傳遞 abort signal
-          personaId: "RONG-001", // 指定角色 ID 用於語音轉譯
-        },
-        // onChunk 回調：發送音頻片段
-        (chunkData) => {
-          // 檢查是否被打斷
-          if (session.isInterrupted || (abortSignal && abortSignal.aborted)) {
-            return;
+      const result = await Promise.race([
+        synthesizeSpeechCartesiaStream(
+          text,
+          {
+            tags: tags,
+            emotion: emotion,
+            abortSignal: abortSignal, // 傳遞 abort signal
+            personaId: "RONG-001", // 指定角色 ID 用於語音轉譯
+          },
+          // onChunk 回調：發送音頻片段
+          (chunkData) => {
+            // 檢查是否被打斷
+            if (session.isInterrupted || (abortSignal && abortSignal.aborted)) {
+              return;
+            }
+
+            // 將音頻片段轉換為 Base64
+            const audioBase64 = chunkData.chunk.toString("base64");
+
+            // 發送音頻片段
+            this.sendMessage(session, {
+              type: "tts_stream_chunk",
+              data: {
+                audio: audioBase64,
+                format: "wav",
+                sequence: chunkData.chunkIndex,
+                isLast: chunkData.isLast,
+                chunkSize: chunkData.chunk.length,
+                totalSize: chunkData.totalSize,
+              },
+            });
+
+            console.log(
+              `   📦 發送 TTS 片段 ${chunkData.chunkIndex + 1} (${(chunkData.chunk.length / 1024).toFixed(2)} KB)${
+                chunkData.isLast ? " [最後]" : ""
+              }`
+            );
           }
-
-          // 將音頻片段轉換為 Base64
-          const audioBase64 = chunkData.chunk.toString("base64");
-
-          // 發送音頻片段
-          this.sendMessage(session, {
-            type: "tts_stream_chunk",
-            data: {
-              audio: audioBase64,
-              format: "wav",
-              sequence: chunkData.chunkIndex,
-              isLast: chunkData.isLast,
-              chunkSize: chunkData.chunk.length,
-              totalSize: chunkData.totalSize,
-            },
-          });
-
-          console.log(
-            `   📦 發送 TTS 片段 ${chunkData.chunkIndex + 1} (${(chunkData.chunk.length / 1024).toFixed(2)} KB)${
-              chunkData.isLast ? " [最後]" : ""
-            }`
-          );
-        }
-      );
+        ),
+        this.createTimeoutPromise(45000, "TTS 處理超時（45秒），請重試"),
+      ]);
       const ttsDuration = Date.now() - ttsStartTime;
       const performanceMonitor = getPerformanceMonitor();
       performanceMonitor.recordTTS(ttsDuration, !!result);
