@@ -203,14 +203,30 @@ const DEFAULT_PROMPT = `你是「花小軟」，語氣靈之中最柔軟的那�
 記住：**你有風的個性，自由而不失根，新鮮而不失溫。**`;
 
 /**
- * 載入系統提示詞（從文件或使用預設值）
+ * 載入系統提示詞（優先從 MDC 文件，其次從 system-prompt.txt，最後使用預設值）
  */
-function loadSystemPrompt() {
+async function loadSystemPrompt() {
   try {
+    // 優先嘗試載入 MDC 文件
+    const mdcPath = path.join(process.cwd(), "config", "RONG-001-CORE.mdc");
+    if (fs.existsSync(mdcPath)) {
+      try {
+        const { loadMDCAsSystemPrompt } = await import("./mdc-parser.js");
+        const prompt = await loadMDCAsSystemPrompt("RONG-001-CORE.mdc");
+        if (prompt) {
+          console.log("📝 載入 MDC 格式系統提示詞（RONG-001-CORE）");
+          return prompt;
+        }
+      } catch (mdcError) {
+        console.warn("⚠️  無法解析 MDC 文件，嘗試載入 system-prompt.txt:", mdcError.message);
+      }
+    }
+    
+    // 其次嘗試載入 system-prompt.txt
     if (fs.existsSync(PROMPT_FILE)) {
       const prompt = fs.readFileSync(PROMPT_FILE, "utf-8").trim();
       if (prompt) {
-        console.log("📝 載入自訂系統提示詞");
+        console.log("📝 載入自訂系統提示詞（system-prompt.txt）");
         return prompt;
       }
     }
@@ -221,13 +237,16 @@ function loadSystemPrompt() {
   return DEFAULT_PROMPT;
 }
 
-// 初始化系統提示詞
-let SYSTEM_PROMPT = loadSystemPrompt();
+// 初始化系統提示詞（異步載入）
+let SYSTEM_PROMPT = null;
 
 /**
  * 獲取當前系統提示詞
  */
 export async function getSystemPrompt() {
+  if (!SYSTEM_PROMPT) {
+    SYSTEM_PROMPT = await loadSystemPrompt();
+  }
   return SYSTEM_PROMPT;
 }
 
@@ -344,7 +363,10 @@ export async function chatWithLLM(prompt, conversationHistory = [], options = {}
     }
 
     // 動態載入最新的系統提示詞（支持熱更新）
-    const currentPrompt = loadSystemPrompt();
+    if (!SYSTEM_PROMPT) {
+      SYSTEM_PROMPT = await loadSystemPrompt();
+    }
+    const currentPrompt = SYSTEM_PROMPT;
     
     // 構建消息列表
     const messages = [
