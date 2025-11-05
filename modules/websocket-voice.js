@@ -4,6 +4,9 @@
  */
 
 import { VoiceSession, SessionState } from "./voice-session.js";
+import { transcribeFromBase64 } from "./stt.js";
+import { analyzeEmotion } from "./llm.js";
+import { mergeAudioChunks } from "./audio-processor.js";
 
 /**
  * WebSocket 語音服務器類
@@ -184,8 +187,24 @@ export class VoiceWebSocketServer {
       return;
     }
 
-    // TODO: Phase 2 - 實現 STT 處理
-    // 暫時返回一個提示消息
+    // 檢查是否被打斷
+    if (session.isInterrupted) {
+      console.log(`⏹️  會話 ${session.id} 已被打斷，取消 STT 處理`);
+      session.clearAudioBuffer();
+      session.setState(SessionState.IDLE);
+      return;
+    }
+
+    // 獲取音頻緩衝區
+    const audioChunks = session.getAudioBuffer();
+    if (!audioChunks || audioChunks.length === 0) {
+      return this.sendError(session, "沒有音頻數據可處理", "NO_AUDIO_DATA");
+    }
+
+    // 設置狀態為轉錄中
+    session.setState(SessionState.TRANSCRIBING);
+
+    // 發送狀態更新
     this.sendMessage(session, {
       type: "status",
       data: {
@@ -193,6 +212,83 @@ export class VoiceWebSocketServer {
         message: "正在識別語音...",
       },
     });
+
+    try {
+      // 合併音頻片段
+      console.log(`🔊 合併 ${audioChunks.length} 個音頻片段 (${session.id})`);
+      const mergedAudioBuffer = await mergeAudioChunks(audioChunks);
+      
+      // 將 Buffer 轉換為 Base64
+      const audioBase64 = mergedAudioBuffer.toString("base64");
+
+      // 進行語音識別
+      console.log(`🎤 開始語音識別 (${session.id})...`);
+      const transcribedText = await transcribeFromBase64(audioBase64, {
+        language: session.language,
+      });
+
+      // 檢查是否被打斷（在 STT 處理期間）
+      if (session.isInterrupted) {
+        console.log(`⏹️  會話 ${session.id} 在 STT 處理期間被打斷`);
+        session.clearAudioBuffer();
+        session.setState(SessionState.IDLE);
+        return;
+      }
+
+      if (!transcribedText || transcribedText.trim().length === 0) {
+        session.setState(SessionState.IDLE);
+        session.clearAudioBuffer();
+        return this.sendError(
+          session,
+          "未識別到語音內容。請確保：1) 說話聲音清晰；2) 環境安靜；3) 麥克風正常工作。",
+          "NO_SPEECH_DETECTED"
+        );
+      }
+
+      console.log(`📝 識別結果 (${session.id}): "${transcribedText}"`);
+
+      // 分析情緒（可選，不阻塞）
+      let emotion = null;
+      try {
+        emotion = await analyzeEmotion(transcribedText);
+        console.log(`😊 檢測到情緒 (${session.id}): ${emotion}`);
+      } catch (emotionError) {
+        console.warn(`⚠️  情緒分析失敗 (${session.id}):`, emotionError.message);
+      }
+
+      // 更新會話狀態
+      session.currentTranscription = transcribedText;
+
+      // 發送最終識別結果
+      this.sendMessage(session, {
+        type: "transcription_final",
+        data: {
+          text: transcribedText,
+          confidence: 0.95, // 默認置信度（Whisper API 不返回置信度）
+          emotion: emotion,
+        },
+      });
+
+      // 清空音頻緩衝區
+      session.clearAudioBuffer();
+
+      // 狀態保持為 TRANSCRIBING，等待 LLM 處理（Phase 3）
+      // TODO: Phase 3 - 觸發 LLM 處理
+
+    } catch (error) {
+      console.error(`❌ STT 處理失敗 (${session.id}):`, error);
+      
+      // 重置狀態
+      session.setState(SessionState.IDLE);
+      session.clearAudioBuffer();
+
+      // 發送錯誤消息
+      this.sendError(
+        session,
+        error.message || "語音識別失敗",
+        "STT_ERROR"
+      );
+    }
   }
 
   /**
