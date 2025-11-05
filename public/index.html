@@ -1319,25 +1319,35 @@
                     
                     const audioUrl = URL.createObjectURL(audioBlob);
                     
-                    // 從響應 Header 獲取 toneTag（emoji 是 Base64 編碼的）
+                    // 從響應 Header 獲取 toneTag（emoji 和 label 都是 Base64 編碼的）
                     const toneTagEmojiBase64 = response.headers.get('X-Tone-Tag-Emoji');
-                    const toneTagLabel = response.headers.get('X-Tone-Tag-Label');
-                    let toneTagEmoji = null;
-                    if (toneTagEmojiBase64) {
+                    const toneTagLabelBase64 = response.headers.get('X-Tone-Tag-Label');
+                    
+                    // 解碼函數（用於解碼 Base64 編碼的 UTF-8 字符串）
+                    function decodeBase64UTF8(base64) {
                         try {
-                            // 解碼 Base64 為 emoji（瀏覽器環境）
-                            // 使用 TextDecoder 確保 UTF-8 emoji 正確解碼
-                            const binaryString = atob(toneTagEmojiBase64);
+                            const binaryString = atob(base64);
                             const bytes = new Uint8Array(binaryString.length);
                             for (let i = 0; i < binaryString.length; i++) {
                                 bytes[i] = binaryString.charCodeAt(i);
                             }
-                            toneTagEmoji = new TextDecoder('utf-8').decode(bytes);
+                            return new TextDecoder('utf-8').decode(bytes);
                         } catch (e) {
-                            console.warn('解碼 emoji 失敗，使用默認值:', e);
-                            toneTagEmoji = '🌸';
+                            console.warn('解碼 Base64 失敗:', e);
+                            return null;
                         }
                     }
+                    
+                    let toneTagEmoji = null;
+                    let toneTagLabel = null;
+                    
+                    if (toneTagEmojiBase64) {
+                        toneTagEmoji = decodeBase64UTF8(toneTagEmojiBase64) || '🌸';
+                    }
+                    if (toneTagLabelBase64) {
+                        toneTagLabel = decodeBase64UTF8(toneTagLabelBase64) || '平靜';
+                    }
+                    
                     const toneTag = (toneTagEmoji && toneTagLabel) ? {
                         emoji: toneTagEmoji,
                         label: toneTagLabel

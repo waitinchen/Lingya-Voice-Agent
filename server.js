@@ -221,12 +221,14 @@ app.post("/api/speak", async (req, res) => {
     const toneTag = getToneTag(finalTags);
 
     // 設置 toneTag 相關 Header（供前端使用）
-    // 將 emoji 編碼為 Base64，避免 HTTP header 錯誤
-    // 使用 UTF-8 編碼確保 emoji 正確處理
+    // 將 emoji 和 label 編碼為 Base64，避免 HTTP header 錯誤（中文字符和 emoji 都會導致問題）
+    // 使用 UTF-8 編碼確保 emoji 和中文正確處理
     const emojiBytes = Buffer.from(toneTag.emoji, 'utf-8');
     const emojiBase64 = emojiBytes.toString('base64');
+    const labelBytes = Buffer.from(toneTag.label, 'utf-8');
+    const labelBase64 = labelBytes.toString('base64');
     res.setHeader("X-Tone-Tag-Emoji", emojiBase64); // 語氣圖標（Base64 編碼）
-    res.setHeader("X-Tone-Tag-Label", toneTag.label); // 語氣標籤
+    res.setHeader("X-Tone-Tag-Label", labelBase64); // 語氣標籤（Base64 編碼）
     res.setHeader("X-Tags", finalTags.join(","));
 
     // 返回音檔（WAV 格式）
@@ -317,12 +319,14 @@ app.post("/api/speak-stream", async (req, res) => {
     res.setHeader("Content-Type", "audio/wav");
     res.setHeader("Content-Length", audioBuffer.length);
     res.setHeader("X-Tags", finalTags.join(",")); // 方便前端知道使用了哪些標籤
-    // 將 emoji 編碼為 Base64，避免 HTTP header 錯誤
-    // 使用 UTF-8 編碼確保 emoji 正確處理
+    // 將 emoji 和 label 編碼為 Base64，避免 HTTP header 錯誤（中文字符和 emoji 都會導致問題）
+    // 使用 UTF-8 編碼確保 emoji 和中文正確處理
     const emojiBytes = Buffer.from(toneTag.emoji, 'utf-8');
     const emojiBase64 = emojiBytes.toString('base64');
+    const labelBytes = Buffer.from(toneTag.label, 'utf-8');
+    const labelBase64 = labelBytes.toString('base64');
     res.setHeader("X-Tone-Tag-Emoji", emojiBase64); // 語氣圖標（Base64 編碼）
-    res.setHeader("X-Tone-Tag-Label", toneTag.label); // 語氣標籤
+    res.setHeader("X-Tone-Tag-Label", labelBase64); // 語氣標籤（Base64 編碼）
     res.send(audioBuffer);
   } catch (error) {
     console.error("❌ TTS 處理失敗:", error);
@@ -579,12 +583,14 @@ app.post("/api/preview", async (req, res) => {
     res.setHeader("Content-Type", "audio/wav");
     res.setHeader("Content-Length", audioBuffer.length);
     res.setHeader("X-Tags", tags.join(",")); // 方便前端知道使用了哪些標籤
-    // 將 emoji 編碼為 Base64，避免 HTTP header 錯誤
-    // 使用 UTF-8 編碼確保 emoji 正確處理
+    // 將 emoji 和 label 編碼為 Base64，避免 HTTP header 錯誤（中文字符和 emoji 都會導致問題）
+    // 使用 UTF-8 編碼確保 emoji 和中文正確處理
     const emojiBytes = Buffer.from(toneTag.emoji, 'utf-8');
     const emojiBase64 = emojiBytes.toString('base64');
+    const labelBytes = Buffer.from(toneTag.label, 'utf-8');
+    const labelBase64 = labelBytes.toString('base64');
     res.setHeader("X-Tone-Tag-Emoji", emojiBase64); // 語氣圖標（Base64 編碼）
-    res.setHeader("X-Tone-Tag-Label", toneTag.label); // 語氣標籤
+    res.setHeader("X-Tone-Tag-Label", labelBase64); // 語氣標籤（Base64 編碼）
     res.send(audioBuffer);
   } catch (error) {
     console.error("❌ 語氣預覽失敗:", error);
