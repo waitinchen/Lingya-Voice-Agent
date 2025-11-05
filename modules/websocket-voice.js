@@ -371,8 +371,8 @@ export class VoiceWebSocketServer {
           session.addToHistory("user", transcribedText);
           session.addToHistory("assistant", finalReply);
 
-          // 狀態保持為 THINKING，等待 TTS 處理（Phase 4）
-          // TODO: Phase 4 - 觸發 TTS 處理
+          // Phase 4: 觸發 TTS 流式處理
+          await this.handleTTSStream(session, finalReply, finalTags, emotion);
 
           return;
         }
