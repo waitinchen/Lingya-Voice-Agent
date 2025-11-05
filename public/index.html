@@ -1405,17 +1405,26 @@
                     
                     // 顯示友好的錯誤信息給用戶（不影響對話）
                     if (messageElement) {
-                        const errorHint = errorJson?.hint || '語音服務暫時不可用';
+                        const errorHint = errorJson?.hint || errorJson?.error || '語音服務暫時不可用';
+                        const errorCode = errorJson?.error || response.status;
                         const errorDiv = document.createElement('div');
                         errorDiv.className = 'tts-error-message';
-                        errorDiv.style.cssText = 'color: #ff5fa2; font-size: 0.8rem; margin-top: 8px; padding: 8px 12px; background: rgba(255, 95, 162, 0.08); border-radius: 8px; border-left: 3px solid #ff5fa2; display: flex; align-items: center; gap: 8px;';
+                        errorDiv.style.cssText = 'color: #ff5fa2; font-size: 0.8rem; margin-top: 8px; padding: 8px 12px; background: rgba(255, 95, 162, 0.08); border-radius: 8px; border-left: 3px solid #ff5fa2; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;';
                         
                         const icon = document.createElement('span');
                         icon.textContent = '🔇';
                         icon.style.fontSize = '1rem';
                         
                         const text = document.createElement('span');
+                        text.style.flex = '1';
                         text.textContent = `語音暫時無法播放（${errorHint}），但文字消息已收到 ✓`;
+                        
+                        // 添加詳細錯誤信息（開發模式）
+                        if (errorJson?.error && errorJson.error.includes('environment variable')) {
+                            text.textContent = `語音暫時無法播放（請檢查 Railway 環境變數設置），但文字消息已收到 ✓`;
+                        } else if (errorJson?.error && errorJson.error.includes('voice') || errorJson?.error.includes('Voice')) {
+                            text.textContent = `語音暫時無法播放（VoiceID 可能無效），但文字消息已收到 ✓`;
+                        }
                         
                     const retryBtn = document.createElement('button');
                     retryBtn.textContent = '重試';
