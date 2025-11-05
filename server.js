@@ -85,7 +85,7 @@ app.get("/", (_, res) => {
   }
 });
 
-// OpenAI LLM 對話端點（支持歸屬記憶核心）
+// OpenAI LLM 對話端點（支持歸屬記憶核心 + Prompt Routing）
 app.post("/api/chat", async (req, res) => {
   try {
     const { text, history = [], emotion, userName, userIdentity } = req.body;
