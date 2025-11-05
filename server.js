@@ -438,20 +438,37 @@ function requireAuth(req, res, next) {
 
 // 登入端點
 app.post("/api/admin/login", (req, res) => {
-  const { username, password } = req.body;
-  
-  if (username === "admin" && password === "admin") {
-    const sessionId = Date.now().toString() + Math.random().toString(36);
-    sessions.set(sessionId, { username, loginTime: Date.now() });
+  try {
+    const { username, password } = req.body;
     
-    res.cookie("admin_session", sessionId, {
-      httpOnly: true,
-      maxAge: 24 * 60 * 60 * 1000, // 24小時
-    });
+    console.log(`🔐 管理後台登入嘗試: username=${username}`);
     
-    res.json({ success: true, message: "登入成功" });
-  } else {
-    res.status(401).json({ success: false, error: "帳號或密碼錯誤" });
+    if (!username || !password) {
+      return res.status(400).json({ success: false, error: "請輸入帳號和密碼" });
+    }
+    
+    if (username === "admin" && password === "admin") {
+      const sessionId = Date.now().toString() + Math.random().toString(36);
+      sessions.set(sessionId, { username, loginTime: Date.now() });
+      
+      // 設置 Cookie（生產環境需要 secure 和 sameSite）
+      const isProduction = process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT;
+      res.cookie("admin_session", sessionId, {
+        httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000, // 24小時
+        secure: isProduction, // 生產環境使用 HTTPS
+        sameSite: isProduction ? 'none' : 'lax', // 生產環境可能需要 'none'
+      });
+      
+      console.log(`✅ 管理後台登入成功: sessionId=${sessionId.substring(0, 10)}...`);
+      res.json({ success: true, message: "登入成功" });
+    } else {
+      console.log(`❌ 管理後台登入失敗: 帳號或密碼錯誤`);
+      res.status(401).json({ success: false, error: "帳號或密碼錯誤" });
+    }
+  } catch (error) {
+    console.error("❌ 登入處理錯誤:", error);
+    res.status(500).json({ success: false, error: "登入時發生錯誤：" + error.message });
   }
 });
 

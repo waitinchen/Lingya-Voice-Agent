@@ -236,6 +236,19 @@
                     credentials: 'include'
                 });
 
+                if (!response.ok) {
+                    // 如果響應不是 200，嘗試讀取錯誤信息
+                    let errorData;
+                    try {
+                        errorData = await response.json();
+                    } catch (e) {
+                        errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
+                    }
+                    showStatus('error', errorData.error || '登入失敗');
+                    console.error('登入失敗:', errorData);
+                    return;
+                }
+                
                 const data = await response.json();
                 
                 if (data.success) {
@@ -247,6 +260,7 @@
                     }, 500);
                 } else {
                     showStatus('error', data.error || '登入失敗');
+                    console.error('登入失敗:', data);
                 }
             } catch (error) {
                 showStatus('error', '登入時發生錯誤：' + error.message);
