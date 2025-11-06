@@ -12,6 +12,7 @@ import { processPromptRouting } from "./prompt-routing.js";
 import { getToneTag } from "./tts-cartesia.js";
 import { synthesizeSpeechCartesiaStream } from "./tts-cartesia-stream.js";
 import { getPerformanceMonitor } from "./performance-monitor.js";
+import { IncrementalSTTProcessor } from "./incremental-stt.js";
 
 /**
  * WebSocket 語音服務器類
@@ -20,6 +21,7 @@ export class VoiceWebSocketServer {
   constructor(expressApp) {
     this.app = expressApp;
     this.sessions = new Map(); // sessionId -> VoiceSession
+    this.incrementalSTTProcessors = new Map(); // sessionId -> IncrementalSTTProcessor
     
     // 延遲設置，避免在構造函數中拋出錯誤
     try {
@@ -162,6 +164,12 @@ export class VoiceWebSocketServer {
       session.setLanguage(data.language);
     }
 
+    // 啟用增量 STT（如果請求）
+    if (data.enableIncrementalSTT) {
+      session.enableIncrementalSTT = true;
+      console.log(`✅ 會話 ${session.id} 啟用增量 STT`);
+    }
+
     // 發送連接確認
     this.sendMessage(session, {
       type: "connected",
@@ -172,6 +180,7 @@ export class VoiceWebSocketServer {
           streaming: true,
           interrupt: true,
           vad: false, // 暫時不支持 VAD
+          incrementalSTT: session.enableIncrementalSTT || false,
         },
       },
     });
@@ -209,8 +218,50 @@ export class VoiceWebSocketServer {
       timestamp: Date.now(),
     });
 
-    // TODO: Phase 2 - 實現增量 STT
-    // 暫時不發送 transcription_partial，等待 audio_end
+    // Phase 2: 增量 STT 支持（可选）
+    // 如果启用了增量 STT，定期处理累积的音频 chunks
+    if (session.enableIncrementalSTT) {
+      await this.processIncrementalSTT(session, msg);
+    }
+  }
+
+  /**
+   * 处理增量 STT
+   */
+  async processIncrementalSTT(session, msg) {
+    // 获取或创建增量 STT 处理器
+    let processor = this.incrementalSTTProcessors.get(session.id);
+    
+    if (!processor) {
+      processor = new IncrementalSTTProcessor({
+        language: session.language,
+        minChunkDuration: 1.0, // 至少 1 秒才处理
+        maxAccumulateDuration: 3.0, // 最多累积 3 秒
+        onPartial: (text) => {
+          // 发送增量转录结果
+          this.sendMessage(session, {
+            type: "transcription_partial",
+            data: {
+              text: text,
+              timestamp: Date.now(),
+            },
+          });
+        },
+        onFinal: () => {
+          // 最终处理完成
+          console.log(`✅ 增量 STT 处理完成 (${session.id})`);
+        },
+      });
+      this.incrementalSTTProcessors.set(session.id, processor);
+    }
+
+    // 添加音频 chunk
+    const { audio, format } = msg.data || {};
+    await processor.addChunk({
+      audio,
+      format,
+      timestamp: Date.now(),
+    });
   }
 
   /**
