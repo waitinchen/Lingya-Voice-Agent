@@ -729,9 +729,23 @@
                     
                 case 'llm_stream_start':
                     // LLM 開始生成（顯示思考動畫）
-                    if (!currentStreamingMessage) {
-                        currentStreamingMessage = addThinkingMessage();
+                    // 清理之前的思考消息（如果存在）
+                    if (currentStreamingMessage && currentStreamingMessage.hasAttribute('data-thinking')) {
+                        console.log('🧹 清理之前的思考消息');
+                        removeThinkingMessage();
+                        currentStreamingMessage = null;
                     }
+                    
+                    // 清理所有旧的思考消息（防止多个思考消息同时存在）
+                    const allThinkingMessages = messagesEl.querySelectorAll('[data-thinking="true"]');
+                    allThinkingMessages.forEach(msg => {
+                        console.log('🧹 清理旧的思考消息');
+                        msg.remove();
+                    });
+                    
+                    // 创建新的思考消息
+                    currentStreamingMessage = addThinkingMessage();
+                    
                     // 設置超時：如果 60 秒內沒有收到 llm_stream_end，自動清除並顯示錯誤
                     // 增加超時時間，因為 LLM 處理可能需要更長時間
                     if (llmStreamTimeout) clearTimeout(llmStreamTimeout);
@@ -1402,8 +1416,23 @@
             if (useWebSocket && wsConnection && wsConnection.readyState === WebSocket.OPEN) {
                 console.log('📤 通過 WebSocket 發送文本消息:', text);
                 
-                // 添加思考動畫消息（在消息氣泡區域）
-                const thinkingMessage = addThinkingMessage();
+                // 清理之前的思考消息和流式消息（如果存在）
+                if (currentStreamingMessage) {
+                    if (currentStreamingMessage.hasAttribute('data-thinking')) {
+                        removeThinkingMessage();
+                    }
+                    currentStreamingMessage = null;
+                }
+                
+                // 清理所有旧的思考消息（防止多个思考消息同时存在）
+                const allThinkingMessages = messagesEl.querySelectorAll('[data-thinking="true"]');
+                allThinkingMessages.forEach(msg => {
+                    console.log('🧹 清理旧的思考消息');
+                    msg.remove();
+                });
+                
+                // 注意：不在这里添加思考消息，等待 llm_stream_start 消息
+                // 这样可以避免重复创建思考消息
                 
                 // 禁用输入，开始生成
                 setInputEnabled(false);
