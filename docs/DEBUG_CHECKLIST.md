@@ -1,5 +1,26 @@
 # 🔍 黃蓉語音助手 - 檢查與除錯需求表
 
+## ⚠️ 重要：項目路徑確認
+
+**本檢查清單僅適用於 `Lingya_Voice_Agent` 項目，不適用於 `soft-voice-mvp` 項目！**
+
+**如果 CODEX 在錯誤的項目中，請先查看：`docs/CODEX_PROJECT_PATH.md`**
+
+### 快速確認項目：
+```bash
+# 確認項目名稱
+cat package.json | grep "name"
+# 應該看到: "name": "lingya-voice-agent"
+
+# 確認目錄結構
+ls docs/ modules/ public/
+# 應該看到這些目錄存在
+
+# 確認依賴
+npm list @anthropic-ai/sdk
+# 應該看到依賴已安裝
+```
+
 ## 📋 檢查清單
 
 ### 1. 環境配置檢查
