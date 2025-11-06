@@ -155,3 +155,4 @@ navigator.permissions.query({ name: 'microphone' }).then(result => {
 - **录音功能**: ⚠️ 启动但数据未发送
 - **用户体验**: ⚠️ 按钮状态未更新，可能让用户困惑
 
+

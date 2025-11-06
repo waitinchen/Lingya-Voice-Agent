@@ -224,3 +224,4 @@ const spokenText = rewriteForSpeech(llmOutput, "RONG-001", {
 
 **最後更新：** 2025-11-05
 
+

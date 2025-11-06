@@ -135,6 +135,9 @@ export class VoiceWebSocketServer {
         case "ping":
           this.handlePing(session, msg);
           break;
+        case "text":
+          await this.handleText(session, msg);
+          break;
         default:
           this.sendError(session, `未知的消息類型: ${msg.type}`, "UNKNOWN_MESSAGE_TYPE");
       }
@@ -208,6 +211,36 @@ export class VoiceWebSocketServer {
 
     // TODO: Phase 2 - 實現增量 STT
     // 暫時不發送 transcription_partial，等待 audio_end
+  }
+
+  /**
+   * 處理文本消息（用戶從輸入框發送的文字）
+   */
+  async handleText(session, msg) {
+    const text = msg.data?.text || "";
+    if (!text || !text.trim()) {
+      return this.sendError(session, "文本內容為空", "EMPTY_TEXT");
+    }
+
+    console.log(`📝 收到文本消息 (${session.id}): "${text}"`);
+
+    // 檢查是否被打斷
+    if (session.isInterrupted) {
+      console.log(`⏹️  會話 ${session.id} 已被打斷，取消文本處理`);
+      return;
+    }
+
+    // 分析情緒（可選，不阻塞）
+    let emotion = null;
+    try {
+      emotion = await analyzeEmotion(text);
+      console.log(`😊 檢測到情緒 (${session.id}): ${emotion}`);
+    } catch (emotionError) {
+      console.warn(`⚠️  情緒分析失敗 (${session.id}):`, emotionError.message);
+    }
+
+    // 觸發 LLM 流式處理
+    await this.handleLLMStream(session, text, emotion);
   }
 
   /**
@@ -324,8 +357,10 @@ export class VoiceWebSocketServer {
       // 清空音頻緩衝區
       session.clearAudioBuffer();
 
-      // Phase 3: 觸發 LLM 流式處理
-      await this.handleLLMStream(session, transcribedText, emotion);
+      // Phase 3: 不自動觸發 LLM，等待用戶確認後再發送
+      // 將文字放入輸入框，讓用戶可以編輯後再發送
+      // 用戶點擊發送按鈕後，會通過 'text' 消息觸發 LLM 處理
+      session.setState(SessionState.IDLE);
 
     } catch (error) {
       console.error(`❌ STT 處理失敗 (${session.id}):`, error);

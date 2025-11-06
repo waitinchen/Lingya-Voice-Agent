@@ -398,112 +398,52 @@
             font-size: 12px;
         }
 
-        /* 声音波浪可视化 */
-        .voice-visualizer {
-            position: fixed;
-            top: 30%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 280px;
-            height: 140px;
-            background: rgba(0, 0, 0, 0.85);
-            border-radius: 18px;
-            padding: 18px;
-            display: none;
-            z-index: 1000;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-            backdrop-filter: blur(10px);
-        }
-
-        .voice-visualizer.active {
-            display: block;
-        }
-
-        .voice-visualizer canvas {
-            width: 100%;
-            height: calc(100% - 25px);
-            border-radius: 8px;
-        }
-
-        .voice-visualizer-text {
+        /* 录音状态指示器（简洁版本，在输入框附近） */
+        .recording-indicator {
             position: absolute;
-            bottom: 8px;
-            left: 50%;
-            transform: translateX(-50%);
-            color: #4ade80;
-            font-size: 11px;
-            text-align: center;
-            width: 90%;
-            font-weight: 500;
-        }
-
-        /* 实时转录文字显示 */
-        .realtime-transcript {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(102, 126, 234, 0.95);
-            color: white;
-            padding: 12px 18px;
-            border-radius: 12px;
-            max-width: 500px;
-            width: 80%;
+            top: -35px;
+            left: 0;
+            right: 0;
             display: none;
-            z-index: 1001;
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
-            font-size: 15px;
-            text-align: center;
-            backdrop-filter: blur(10px);
-        }
-
-        .realtime-transcript.active {
-            display: block;
-            animation: slideUp 0.3s;
-        }
-
-        @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateX(-50%) translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(-50%) translateY(0);
-            }
-        }
-
-        .realtime-transcript .transcript-text {
-            margin-bottom: 3px;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #667eea;
             font-weight: 500;
-            min-height: 20px;
+            z-index: 10;
         }
 
-        .realtime-transcript .transcript-hint {
-            font-size: 11px;
-            opacity: 0.7;
-            margin-top: 3px;
+        .recording-indicator.active {
+            display: flex;
         }
-        
-        /* 手机端优化 */
-        @media (max-width: 768px) {
-            .realtime-transcript {
-                top: 45%;
-                max-width: 85%;
-                padding: 10px 15px;
-                font-size: 14px;
+
+        .recording-indicator .recording-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ef4444;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+                transform: scale(1);
             }
-            
-            .voice-visualizer {
-                width: 250px;
-                height: 120px;
-                padding: 15px;
+            50% {
+                opacity: 0.5;
+                transform: scale(0.8);
             }
-            
-            .voice-visualizer-text {
-                font-size: 11px;
-                bottom: 8px;
-            }
+        }
+
+        /* 隐藏原来的大覆盖层 UI */
+        .voice-visualizer {
+            display: none !important;
+        }
+
+        .realtime-transcript {
+            display: none !important;
         }
 
         .loading {
@@ -619,7 +559,11 @@
         </div>
         
         <div class="chat-input">
-            <div class="input-group">
+            <div class="input-group" style="position: relative;">
+                <div class="recording-indicator" id="recordingIndicator">
+                    <span class="recording-dot"></span>
+                    <span>正在錄音...</span>
+                </div>
                 <input type="text" id="textInput" placeholder="輸入訊息..." />
                 <button class="btn-send" id="sendBtn">發送</button>
             </div>
@@ -630,14 +574,12 @@
         <div class="status" id="status"></div>
     </div>
 
-    <!-- 声音波浪可视化 -->
-    <div class="voice-visualizer" id="voiceVisualizer">
+    <!-- 隐藏原来的可视化组件（保留用于兼容性） -->
+    <div class="voice-visualizer" id="voiceVisualizer" style="display: none;">
         <canvas id="audioCanvas"></canvas>
         <div class="voice-visualizer-text">正在錄音... 🎤</div>
     </div>
-
-    <!-- 实时转录显示 -->
-    <div class="realtime-transcript" id="realtimeTranscript">
+    <div class="realtime-transcript" id="realtimeTranscript" style="display: none;">
         <div class="transcript-text" id="transcriptText"></div>
     </div>
 
@@ -768,11 +710,20 @@
                     break;
                     
                 case 'transcription_final':
-                    // 最終語音識別（顯示用戶消息）
+                    // 最終語音識別（將文字放入輸入框，讓用戶確認後發送）
                     if (msg.data?.text) {
-                        addMessage('user', msg.data.text);
+                        const transcribedText = msg.data.text.trim();
+                        if (transcribedText) {
+                            // 將識別的文字放入輸入框
+                            textInput.value = transcribedText;
+                            // 聚焦到輸入框，方便用戶編輯
+                            textInput.focus();
+                            // 將光標移到末尾
+                            textInput.setSelectionRange(transcribedText.length, transcribedText.length);
+                            console.log('📝 語音識別完成，文字已放入輸入框:', transcribedText);
+                        }
                         // 隱藏轉錄顯示
-                        transcriptEl.classList.remove('active');
+                        if (transcriptEl) transcriptEl.classList.remove('active');
                     }
                     break;
                     
@@ -1437,6 +1388,38 @@
             addMessage('user', text);
             textInput.value = '';
             
+            // 如果使用 WebSocket，通過 WebSocket 發送文本消息（享受流式響應）
+            if (useWebSocket && wsConnection && wsConnection.readyState === WebSocket.OPEN) {
+                console.log('📤 通過 WebSocket 發送文本消息:', text);
+                
+                // 添加思考動畫消息（在消息氣泡區域）
+                const thinkingMessage = addThinkingMessage();
+                
+                // 禁用输入，开始生成
+                setInputEnabled(false);
+                isVoiceGenerating = true;
+                
+                // 通過 WebSocket 發送文本消息，觸發 LLM 流式處理
+                sendWSMessage({
+                    type: 'text',
+                    data: {
+                        text: text,
+                        userIdentity: currentUserIdentity || null,
+                        userName: currentUserName || null,
+                    }
+                });
+                
+                // 檢測是否提到「老爸」關鍵詞，更新背景
+                if (text.includes('老爸') || text.includes('陈威廷') || text.includes('陳威廷')) {
+                    document.body.style.background = 'linear-gradient(135deg, #ff9a9e 0%, #fecfef 50%, #fecfef 100%)';
+                    currentUserIdentity = 'dad';
+                    console.log('💖 檢測到老爸，切換為親暱模式');
+                }
+                
+                return; // WebSocket 模式下，後續處理由 WebSocket 消息處理
+            }
+            
+            // 否則使用 HTTP API（非流式響應）
             // 添加思考動畫消息（在消息氣泡區域）
             const thinkingMessage = addThinkingMessage();
             
@@ -2186,9 +2169,8 @@
                 const bufferLength = analyser.frequencyBinCount;
                 dataArray = new Uint8Array(bufferLength);
                 
-                // 顯示可視化
-                visualizerEl.classList.add('active');
-                drawWaveform();
+                // 顯示錄音指示器（已由 onstart 處理）
+                // 可視化功能已移除，保留 drawWaveform 調用以兼容（不會顯示）
                 
                 // 啟動實時語音識別
                 if (recognition) {
@@ -2237,7 +2219,11 @@
                     console.log('✅ MediaRecorder 開始錄制，狀態:', mediaRecorder.state);
                     isRecording = true;
                     voiceBtn.classList.add('recording');
-                    setStatus('正在錄音... 🎤');
+                    // 顯示簡潔的錄音指示器
+                    if (recordingIndicator) {
+                        recordingIndicator.classList.add('active');
+                    }
+                    setStatus('正在錄音...');
                 };
                 
                 mediaRecorder.ondataavailable = (event) => {
@@ -2279,12 +2265,10 @@
                     const recordingDuration = recordingStartTime ? Date.now() - recordingStartTime : 0;
                     console.log(`✅ 錄音完成，共 ${audioChunks.length} 個數據塊，時長: ${(recordingDuration / 1000).toFixed(2)} 秒`);
                     
-                    // 停止可視化（延迟一小段时间，让用户看到最终转录结果）
-                    setTimeout(() => {
-                        visualizerEl.classList.remove('active');
-                        transcriptEl.classList.remove('active');
-                        if (transcriptTextEl) transcriptTextEl.textContent = '';
-                    }, 500);
+                    // 隱藏錄音指示器
+                    if (recordingIndicator) {
+                        recordingIndicator.classList.remove('active');
+                    }
                     
                     // 停止語音識別
                     if (recognition) {
@@ -2306,12 +2290,9 @@
                         stream.getTracks().forEach(track => track.stop());
                         isRecording = false;
                         voiceBtn.classList.remove('recording');
+                        if (recordingIndicator) recordingIndicator.classList.remove('active');
                         recordingStartTime = null;
                         silenceStartTime = null; // 重置静音计时
-                        
-                        // 清理可視化和轉錄
-                        if (visualizerEl) visualizerEl.classList.remove('active');
-                        if (transcriptEl) transcriptEl.classList.remove('active');
                         return;
                     }
                     
@@ -2325,12 +2306,9 @@
                         stream.getTracks().forEach(track => track.stop());
                         isRecording = false;
                         voiceBtn.classList.remove('recording');
+                        if (recordingIndicator) recordingIndicator.classList.remove('active');
                         recordingStartTime = null;
                         silenceStartTime = null; // 重置静音计时
-                        
-                        // 清理可視化和轉錄
-                        if (visualizerEl) visualizerEl.classList.remove('active');
-                        if (transcriptEl) transcriptEl.classList.remove('active');
                         return;
                     }
                     
@@ -2418,8 +2396,7 @@
                 }
                 
                 // 清理資源
-                if (visualizerEl) visualizerEl.classList.remove('active');
-                if (transcriptEl) transcriptEl.classList.remove('active');
+                if (recordingIndicator) recordingIndicator.classList.remove('active');
                 if (recognition) recognition.stop();
                 recordingStartTime = null;
                 silenceStartTime = null; // 重置静音计时
@@ -2492,8 +2469,8 @@
                 
                 console.log('⏹️  停止錄音...');
                 
-                // 立即隐藏可视化，避免重叠
-                if (visualizerEl) visualizerEl.classList.remove('active');
+                // 隱藏錄音指示器
+                if (recordingIndicator) recordingIndicator.classList.remove('active');
                 
                 // 重置静音计时
                 silenceStartTime = null;
