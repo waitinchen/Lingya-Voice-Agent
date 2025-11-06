@@ -222,6 +222,12 @@ npm run test:quick # 快速測試
 
 ## 📚 文檔
 
+### 部署相關
+- [🎙️ 語音功能部署完整指南](./VOICE_DEPLOYMENT.md) - 從 API 申請到完整部署
+- [🚂 Railway 部署指南](./RAILWAY_SETUP.md)
+- [📋 一般部署指南](./DEPLOYMENT.md)
+
+### 功能說明
 - [語氣標籤轉譯層](./docs/VOICE_PARAMS_TRANSLATION.md)
 - [三個升級功能](./docs/VOICE_UPGRADE_GUIDE.md)
 - [語氣呼吸曲線](./docs/TONE_BREATH_CURVE.md)
