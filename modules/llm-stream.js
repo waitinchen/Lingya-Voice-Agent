@@ -236,7 +236,7 @@ export async function chatWithLLMStream(prompt, conversationHistory = [], option
         temperature: temperature,
         system: systemPrompt,
         messages: conversationMessages,
-        abortSignal: abortSignal, // 支持中止
+        signal: abortSignal, // 支持中止（使用 signal 參數）
       });
 
       for await (const event of stream) {
