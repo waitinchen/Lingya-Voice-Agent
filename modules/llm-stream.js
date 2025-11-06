@@ -236,13 +236,17 @@ export async function chatWithLLMStream(prompt, conversationHistory = [], option
         temperature: temperature,
         system: systemPrompt,
         messages: conversationMessages,
-        signal: abortSignal, // 支持中止（使用 signal 參數）
+        // 注意：Anthropic SDK 不支持 signal 参数，需要在循环中检查 abortSignal
       });
 
       for await (const event of stream) {
-        // 檢查是否被中止
+        // 檢查是否被中止（Anthropic SDK 不支持 signal 参数，所以在这里检查）
         if (abortSignal && abortSignal.aborted) {
           console.log("⏹️  LLM 流式處理被中止");
+          // 尝试中止流（如果支持）
+          if (typeof stream.abort === 'function') {
+            stream.abort();
+          }
           throw new Error("LLM stream aborted");
         }
         
