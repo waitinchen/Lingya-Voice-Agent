@@ -1,5 +1,23 @@
 # 🚀 快速除錯指南 - 給本地 CODEX
 
+## ⚠️ 重要：確認項目路徑
+
+**本指南僅適用於 `Lingya_Voice_Agent` 項目！**
+
+**如果目前在 `soft-voice-mvp` 項目中，請先切換：**
+```bash
+cd /path/to/Lingya_Voice_Agent
+# 或查看 CODEX_README.md 獲取詳細切換指南
+```
+
+**快速確認：**
+```bash
+cat package.json | grep "lingya-voice-agent"
+# 應該看到項目名稱
+ls docs/ modules/
+# 應該看到這些目錄存在
+```
+
 ## ⚡ 快速檢查（5分鐘）
 
 ### 1. 環境檢查
