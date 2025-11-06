@@ -73,12 +73,31 @@ for await (const event of stream) {
 - **OpenAI SDK** (`openai`) 的 `chat.completions.create()` **支持** `signal` 参数
 - 对于 Anthropic SDK，需要在循环中手动检查 `abortSignal.aborted` 来实现中止功能
 
+## 后续修复
+
+### 修复 "Request was aborted" 错误
+
+**问题**：用户看到错误消息 "Request was aborted"
+
+**原因**：当请求被中止时，Anthropic SDK 可能抛出 "Request was aborted" 错误，这个错误被传播到前端显示给用户。
+
+**修复方案**：
+1. 在请求开始前检查 `abortSignal.aborted`，避免不必要的请求
+2. 在错误处理中识别 "Request was aborted" 错误，不向用户显示
+3. 统一处理所有中止相关的错误消息
+
+**提交记录**：
+- `0227e60` - fix: handle 'Request was aborted' error gracefully without showing to user
+
 ## 验证步骤
 
 1. 等待部署完成（Railway 自动部署）
 2. 刷新页面 `https://lva.angelslab.io/`
 3. 发送测试消息
-4. 确认不再出现 `abortSignal: Extra inputs are not permitted` 错误
+4. 确认不再出现以下错误：
+   - `abortSignal: Extra inputs are not permitted`
+   - `signal: Extra inputs are not permitted`
+   - `Request was aborted`（现在会静默处理，不显示给用户）
 
 ## 相关文件
 
