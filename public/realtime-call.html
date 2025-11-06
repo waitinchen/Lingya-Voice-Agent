@@ -204,6 +204,7 @@
         let ws = null;
         let isRecording = false;
         let mediaRecorder = null;
+        let audioStream = null; // 保存音频流以便停止时关闭
         let audioContext = null;
         let processor = null;
         let useIncrementalSTT = false;
@@ -372,7 +373,7 @@
                     : 'audio/webm';
                 
                 mediaRecorder = new MediaRecorder(stream, { mimeType });
-                audioChunks = [];
+                audioStream = stream; // 保存流引用以便停止时关闭
 
                 mediaRecorder.ondataavailable = (event) => {
                     if (event.data && event.data.size > 0) {
@@ -398,12 +399,18 @@
 
                 mediaRecorder.onstop = () => {
                     // 發送 audio_end
-                    ws.send(JSON.stringify({
-                        type: 'audio_end',
-                        data: {}
-                    }));
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({
+                            type: 'audio_end',
+                            data: {}
+                        }));
+                    }
                     
-                    stream.getTracks().forEach(track => track.stop());
+                    // 停止所有音频轨道
+                    if (audioStream) {
+                        audioStream.getTracks().forEach(track => track.stop());
+                        audioStream = null;
+                    }
                     log('⏹️ 錄音已停止', 'info');
                 };
 
@@ -416,6 +423,15 @@
                 isRecording = false;
                 callBtn.style.display = 'block';
                 stopBtn.style.display = 'none';
+                
+                // 清理资源
+                if (audioStream) {
+                    audioStream.getTracks().forEach(track => track.stop());
+                    audioStream = null;
+                }
+                if (mediaRecorder) {
+                    mediaRecorder = null;
+                }
             }
         }
 
@@ -426,6 +442,12 @@
                 callBtn.style.display = 'block';
                 stopBtn.style.display = 'none';
                 updateStatus('已連接', 'connected');
+            }
+            
+            // 确保停止音频流
+            if (audioStream) {
+                audioStream.getTracks().forEach(track => track.stop());
+                audioStream = null;
             }
         }
 
