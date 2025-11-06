@@ -95,6 +95,18 @@ export class VoiceWebSocketServer {
     // 設置連接關閉處理
     ws.on("close", (code, reason) => {
       console.log(`🔌 連接關閉: ${session.id} (code: ${code}, reason: ${reason})`);
+      
+      // 清理会话相关资源
+      if (this.incrementalSTTProcessors.has(session.id)) {
+        const processor = this.incrementalSTTProcessors.get(session.id);
+        processor.reset();
+        this.incrementalSTTProcessors.delete(session.id);
+      }
+      
+      if (this.errorRecoveryManagers.has(session.id)) {
+        this.errorRecoveryManagers.delete(session.id);
+      }
+      
       this.sessions.delete(session.id);
       session.close("client_disconnect");
       
@@ -106,6 +118,16 @@ export class VoiceWebSocketServer {
     // 設置錯誤處理
     ws.on("error", (error) => {
       console.error(`❌ WebSocket 錯誤 (${session.id}):`, error);
+      
+      // 清理会话相关资源
+      if (this.incrementalSTTProcessors.has(session.id)) {
+        this.incrementalSTTProcessors.delete(session.id);
+      }
+      
+      if (this.errorRecoveryManagers.has(session.id)) {
+        this.errorRecoveryManagers.delete(session.id);
+      }
+      
       const performanceMonitor = getPerformanceMonitor();
       performanceMonitor.recordWebSocketError();
       this.sessions.delete(session.id);
