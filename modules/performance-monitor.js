@@ -46,6 +46,27 @@ class PerformanceMonitor {
         external: 0,
         rss: 0,
       },
+      audio: {
+        chunksProcessed: 0,
+        chunksError: 0,
+        avgChunkSize: 0,
+        totalAudioSize: 0,
+        processingTime: [],
+        avgProcessingTime: 0,
+      },
+      vad: {
+        speechDetections: 0,
+        silenceDetections: 0,
+        avgSpeechDuration: 0,
+        speechDurations: [],
+      },
+      errorRecovery: {
+        retries: 0,
+        successfulRecoveries: 0,
+        failedRecoveries: 0,
+        recoveryTime: [],
+        avgRecoveryTime: 0,
+      },
     };
 
     // 定期更新內存使用情況
@@ -292,6 +313,29 @@ class PerformanceMonitor {
           ? Math.round((this.metrics.memory.heapUsed / this.metrics.memory.heapTotal) * 100 * 100) / 100
           : 0,
       },
+      audio: {
+        chunksProcessed: this.metrics.audio.chunksProcessed,
+        chunksError: this.metrics.audio.chunksError,
+        errorRate: this.metrics.audio.chunksProcessed > 0
+          ? Math.round((this.metrics.audio.chunksError / this.metrics.audio.chunksProcessed) * 100 * 100) / 100
+          : 0,
+        avgChunkSize: Math.round(this.metrics.audio.avgChunkSize),
+        avgProcessingTime: Math.round(this.metrics.audio.avgProcessingTime),
+      },
+      vad: {
+        speechDetections: this.metrics.vad.speechDetections,
+        silenceDetections: this.metrics.vad.silenceDetections,
+        avgSpeechDuration: Math.round(this.metrics.vad.avgSpeechDuration),
+      },
+      errorRecovery: {
+        retries: this.metrics.errorRecovery.retries,
+        successfulRecoveries: this.metrics.errorRecovery.successfulRecoveries,
+        failedRecoveries: this.metrics.errorRecovery.failedRecoveries,
+        successRate: this.metrics.errorRecovery.retries > 0
+          ? Math.round((this.metrics.errorRecovery.successfulRecoveries / this.metrics.errorRecovery.retries) * 100 * 100) / 100
+          : 0,
+        avgRecoveryTime: Math.round(this.metrics.errorRecovery.avgRecoveryTime),
+      },
       uptime: process.uptime(),
       timestamp: new Date().toISOString(),
     };
@@ -343,6 +387,78 @@ class PerformanceMonitor {
         rss: 0,
       },
     };
+  }
+
+  /**
+   * 記錄音頻處理
+   */
+  recordAudioProcessing(chunkSize, processingTime, success = true) {
+    this.metrics.audio.chunksProcessed++;
+    
+    if (!success) {
+      this.metrics.audio.chunksError++;
+      return;
+    }
+
+    this.metrics.audio.totalAudioSize += chunkSize;
+    this.metrics.audio.avgChunkSize = 
+      this.metrics.audio.totalAudioSize / this.metrics.audio.chunksProcessed;
+
+    if (processingTime !== undefined) {
+      this.metrics.audio.processingTime.push(processingTime);
+      if (this.metrics.audio.processingTime.length > 100) {
+        this.metrics.audio.processingTime.shift();
+      }
+      
+      const total = this.metrics.audio.processingTime.reduce((a, b) => a + b, 0);
+      this.metrics.audio.avgProcessingTime = 
+        total / this.metrics.audio.processingTime.length;
+    }
+  }
+
+  /**
+   * 記錄 VAD 檢測
+   */
+  recordVADDetection(type, duration = 0) {
+    if (type === 'speech') {
+      this.metrics.vad.speechDetections++;
+      if (duration > 0) {
+        this.metrics.vad.speechDurations.push(duration);
+        if (this.metrics.vad.speechDurations.length > 100) {
+          this.metrics.vad.speechDurations.shift();
+        }
+        
+        const total = this.metrics.vad.speechDurations.reduce((a, b) => a + b, 0);
+        this.metrics.vad.avgSpeechDuration = 
+          total / this.metrics.vad.speechDurations.length;
+      }
+    } else if (type === 'silence') {
+      this.metrics.vad.silenceDetections++;
+    }
+  }
+
+  /**
+   * 記錄錯誤恢復
+   */
+  recordErrorRecovery(success, recoveryTime = 0) {
+    this.metrics.errorRecovery.retries++;
+    
+    if (success) {
+      this.metrics.errorRecovery.successfulRecoveries++;
+    } else {
+      this.metrics.errorRecovery.failedRecoveries++;
+    }
+
+    if (recoveryTime > 0) {
+      this.metrics.errorRecovery.recoveryTime.push(recoveryTime);
+      if (this.metrics.errorRecovery.recoveryTime.length > 100) {
+        this.metrics.errorRecovery.recoveryTime.shift();
+      }
+      
+      const total = this.metrics.errorRecovery.recoveryTime.reduce((a, b) => a + b, 0);
+      this.metrics.errorRecovery.avgRecoveryTime = 
+        total / this.metrics.errorRecovery.recoveryTime.length;
+    }
   }
 
   /**

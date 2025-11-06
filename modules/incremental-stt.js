@@ -172,24 +172,44 @@ export class IncrementalSTTProcessor {
       return chunks[0].audio;
     }
 
-    // 对于多个 chunks，使用服务器端的 mergeAudioChunks 函数
-    // 导入合并函数
-    const { mergeAudioChunks } = await import('./audio-processor.js');
-    
-    // 将 Base64 chunks 转换为 audio-processor 期望的格式
-    const audioChunks = chunks.map(chunk => ({
-      audio: chunk.audio, // Base64 字符串
-      format: chunk.format || 'webm',
-      sampleRate: 16000,
-      channels: 1,
-      timestamp: chunk.timestamp,
-    }));
-    
-    // 合并音频（mergeAudioChunks 会处理 Base64 到 Buffer 的转换）
-    const mergedBuffer = await mergeAudioChunks(audioChunks);
-    
-    // 转换回 Base64
-    return mergedBuffer.toString('base64');
+    // 尝试使用 ffmpeg 合并（如果可用），否则使用简单合并
+    try {
+      const { mergeAudioWithFFmpeg } = await import('./audio-ffmpeg.js');
+      
+      // 将 Base64 chunks 转换为 Buffer
+      const audioChunks = chunks.map(chunk => ({
+        audio: Buffer.from(chunk.audio, 'base64'),
+        format: chunk.format || 'webm',
+        sampleRate: 16000,
+        channels: 1,
+        timestamp: chunk.timestamp,
+      }));
+      
+      // 使用 ffmpeg 合并
+      const mergedBuffer = await mergeAudioWithFFmpeg(audioChunks, {
+        outputFormat: chunks[0].format || 'webm',
+        sampleRate: 16000,
+        channels: 1,
+      });
+      
+      // 转换回 Base64
+      return mergedBuffer.toString('base64');
+    } catch (error) {
+      console.warn('⚠️ ffmpeg 合并失败，使用简单合并:', error.message);
+      
+      // 降级到简单合并
+      const { mergeAudioChunks } = await import('./audio-processor.js');
+      const audioChunks = chunks.map(chunk => ({
+        audio: chunk.audio,
+        format: chunk.format || 'webm',
+        sampleRate: 16000,
+        channels: 1,
+        timestamp: chunk.timestamp,
+      }));
+      
+      const mergedBuffer = await mergeAudioChunks(audioChunks);
+      return mergedBuffer.toString('base64');
+    }
   }
 }
 

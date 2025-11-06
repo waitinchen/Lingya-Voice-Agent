@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>黃蓉實時語音通話 v2.0 (AudioWorklet + VAD)</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .call-container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 30px;
+        }
+
+        .status {
+            text-align: center;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .status.connected { background: #d4edda; color: #155724; }
+        .status.disconnected { background: #f8d7da; color: #721c24; }
+        .status.recording { background: #fff3cd; color: #856404; }
+        .status.speaking { background: #cfe2ff; color: #084298; }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        button {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-call {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-call.recording {
+            background: #ef4444;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        .btn-stop {
+            background: #6c757d;
+            color: white;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .transcript {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            min-height: 100px;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+
+        .transcript-item {
+            margin-bottom: 10px;
+            padding: 8px;
+            background: white;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .transcript-item.user { border-left: 3px solid #667eea; }
+        .transcript-item.assistant { border-left: 3px solid #28a745; }
+        .transcript-item.partial { opacity: 0.6; font-style: italic; }
+
+        .vad-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .vad-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #6c757d;
+            transition: all 0.3s;
+        }
+
+        .vad-dot.active {
+            background: #28a745;
+            animation: pulse 1s ease-in-out infinite;
+        }
+
+        .log {
+            margin-top: 20px;
+            padding: 15px;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .log-item {
+            margin-bottom: 3px;
+        }
+
+        .log-item.error { color: #f48771; }
+        .log-item.success { color: #4ec9b0; }
+        .log-item.info { color: #9cdcfe; }
+    </style>
+</head>
+<body>
+    <div class="call-container">
+        <h1>🎤 黃蓉實時語音通話 v2.0</h1>
+        <div class="subtitle">AudioWorklet + VAD 自動檢測</div>
+        
+        <div class="status" id="status">未連接</div>
+        
+        <div class="vad-indicator">
+            <span>語音檢測:</span>
+            <div class="vad-dot" id="vadDot"></div>
+            <span id="vadStatus">等待中...</span>
+        </div>
+        
+        <div class="controls">
+            <button class="btn-call" id="callBtn">開始通話</button>
+            <button class="btn-stop" id="stopBtn" style="display: none;">結束通話</button>
+        </div>
+
+        <div class="transcript" id="transcript">
+            <div style="text-align: center; color: #999; padding: 20px;">
+                對話記錄將顯示在這裡...
+            </div>
+        </div>
+
+        <div class="log" id="log"></div>
+    </div>
+
+    <script type="module">
+        // 导入模块（简化版本，实际使用时需要处理模块加载）
+        
+        let ws = null;
+        let isRecording = false;
+        let audioWorkletProcessor = null;
+        let vadDetector = null;
+        let useIncrementalSTT = true;
+
+        const statusEl = document.getElementById('status');
+        const callBtn = document.getElementById('callBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const transcriptEl = document.getElementById('transcript');
+        const logEl = document.getElementById('log');
+        const vadDot = document.getElementById('vadDot');
+        const vadStatus = document.getElementById('vadStatus');
+
+        function log(message, type = 'info') {
+            const time = new Date().toLocaleTimeString();
+            const logItem = document.createElement('div');
+            logItem.className = `log-item ${type}`;
+            logItem.textContent = `[${time}] ${message}`;
+            logEl.appendChild(logItem);
+            logEl.scrollTop = logEl.scrollHeight;
+            console.log(`[${time}] ${message}`);
+        }
+
+        function updateStatus(text, className) {
+            statusEl.textContent = text;
+            statusEl.className = `status ${className}`;
+        }
+
+        function updateVAD(isSpeaking) {
+            if (isSpeaking) {
+                vadDot.classList.add('active');
+                vadStatus.textContent = '檢測到語音';
+            } else {
+                vadDot.classList.remove('active');
+                vadStatus.textContent = '靜音中';
+            }
+        }
+
+        function addTranscript(text, role = 'user', isPartial = false) {
+            if (transcriptEl.children.length === 1 && transcriptEl.children[0].textContent.includes('對話記錄')) {
+                transcriptEl.innerHTML = '';
+            }
+
+            const item = document.createElement('div');
+            item.className = `transcript-item ${role} ${isPartial ? 'partial' : ''}`;
+            item.textContent = text;
+            transcriptEl.appendChild(item);
+            transcriptEl.scrollTop = transcriptEl.scrollHeight;
+        }
+
+        async function initWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/api/voice-ws`;
+            
+            log(`嘗試連接 WebSocket: ${wsUrl}`, 'info');
+            
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                log('✅ WebSocket 連接成功', 'success');
+                updateStatus('已連接', 'connected');
+                
+                ws.send(JSON.stringify({
+                    type: 'connect',
+                    data: {
+                        language: 'zh',
+                        enableIncrementalSTT: useIncrementalSTT,
+                    }
+                }));
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+                    handleWSMessage(msg);
+                } catch (error) {
+                    log(`❌ 解析消息失敗: ${error.message}`, 'error');
+                }
+            };
+
+            ws.onerror = (error) => {
+                log(`❌ WebSocket 錯誤: ${error}`, 'error');
+                updateStatus('連接錯誤', 'disconnected');
+            };
+
+            ws.onclose = () => {
+                log('🔌 WebSocket 連接關閉', 'info');
+                updateStatus('未連接', 'disconnected');
+                ws = null;
+            };
+        }
+
+        function handleWSMessage(msg) {
+            log(`📥 收到消息: ${msg.type}`, 'info');
+            
+            switch (msg.type) {
+                case 'connected':
+                    log(`✅ 會話已建立: ${msg.data?.sessionId}`, 'success');
+                    break;
+                    
+                case 'transcription_partial':
+                    if (msg.data?.text) {
+                        addTranscript(msg.data.text, 'user', true);
+                    }
+                    break;
+                    
+                case 'transcription_final':
+                    if (msg.data?.text) {
+                        addTranscript(msg.data.text, 'user');
+                    }
+                    break;
+                    
+                case 'llm_stream_end':
+                    if (msg.data?.fullText) {
+                        addTranscript(msg.data.fullText, 'assistant');
+                        log(`💬 黃蓉回應: ${msg.data.fullText}`, 'success');
+                    }
+                    break;
+                    
+                case 'tts_stream_chunk':
+                    if (msg.data?.audio) {
+                        playAudioChunk(msg.data.audio);
+                    }
+                    break;
+                    
+                case 'error':
+                    log(`❌ 錯誤: ${msg.error?.message || '未知錯誤'}`, 'error');
+                    break;
+            }
+        }
+
+        function playAudioChunk(base64Audio) {
+            try {
+                const audio = new Audio(`data:audio/wav;base64,${base64Audio}`);
+                audio.play().catch(err => {
+                    log(`⚠️ 音頻播放失敗: ${err.message}`, 'error');
+                });
+            } catch (error) {
+                log(`❌ 播放音頻失敗: ${error.message}`, 'error');
+            }
+        }
+
+        async function startCall() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('❌ WebSocket 未連接', 'error');
+                return;
+            }
+
+            try {
+                log('🎤 開始錄音...', 'info');
+                updateStatus('正在錄音...', 'recording');
+                callBtn.style.display = 'none';
+                stopBtn.style.display = 'block';
+                isRecording = true;
+
+                // 尝试使用 AudioWorklet（如果支持）
+                try {
+                    const { createAudioWorkletProcessor } = await import('/modules/audio-worklet-processor.js');
+                    
+                    // 创建 VAD 检测器（简化版本）
+                    vadDetector = {
+                        isSpeaking: false,
+                        processAudio: (audioData) => {
+                            // 简单的音量检测
+                            let sum = 0;
+                            for (let i = 0; i < audioData.length; i++) {
+                                sum += Math.abs(audioData[i]);
+                            }
+                            const avgVolume = sum / audioData.length;
+                            const isSpeaking = avgVolume > 0.01; // 阈值
+                            
+                            updateVAD(isSpeaking);
+                        }
+                    };
+
+                    audioWorkletProcessor = await createAudioWorkletProcessor({
+                        sampleRate: 16000,
+                        chunkInterval: 200,
+                        onAudioChunk: (chunk) => {
+                            // VAD 检测
+                            if (vadDetector) {
+                                vadDetector.processAudio(chunk.data);
+                            }
+
+                            // 发送音频 chunk
+                            const base64 = encodePCMToBase64(chunk.data);
+                            ws.send(JSON.stringify({
+                                type: 'audio_chunk',
+                                data: {
+                                    audio: base64,
+                                    format: 'pcm',
+                                    sampleRate: chunk.sampleRate,
+                                    channels: 1
+                                }
+                            }));
+                        }
+                    });
+
+                    audioWorkletProcessor.start();
+                    log('✅ AudioWorklet 处理器已启动', 'success');
+                } catch (workletError) {
+                    log(`⚠️ AudioWorklet 不支持，降级到 MediaRecorder: ${workletError.message}`, 'info');
+                    
+                    // 降级到 MediaRecorder
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        audio: {
+                            sampleRate: 16000,
+                            channelCount: 1,
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                        }
+                    });
+
+                    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
+                        ? 'audio/webm;codecs=opus' 
+                        : 'audio/webm';
+                    
+                    const mediaRecorder = new MediaRecorder(stream, { mimeType });
+
+                    mediaRecorder.ondataavailable = (event) => {
+                        if (event.data && event.data.size > 0) {
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                                const base64 = reader.result.split(',')[1];
+                                ws.send(JSON.stringify({
+                                    type: 'audio_chunk',
+                                    data: {
+                                        audio: base64,
+                                        format: mimeType.includes('mp4') ? 'mp4' : 'webm',
+                                        sampleRate: 16000,
+                                        channels: 1
+                                    }
+                                }));
+                            };
+                            reader.readAsDataURL(event.data);
+                        }
+                    };
+
+                    mediaRecorder.onstop = () => {
+                        ws.send(JSON.stringify({
+                            type: 'audio_end',
+                            data: {}
+                        }));
+                        stream.getTracks().forEach(track => track.stop());
+                    };
+
+                    mediaRecorder.start(200);
+                    audioWorkletProcessor = { stop: () => mediaRecorder.stop() };
+                }
+                
+            } catch (error) {
+                log(`❌ 錄音啟動失敗: ${error.message}`, 'error');
+                updateStatus('錄音失敗', 'disconnected');
+                isRecording = false;
+                callBtn.style.display = 'block';
+                stopBtn.style.display = 'none';
+            }
+        }
+
+        function stopCall() {
+            if (audioWorkletProcessor && isRecording) {
+                audioWorkletProcessor.stop();
+                isRecording = false;
+                callBtn.style.display = 'block';
+                stopBtn.style.display = 'none';
+                updateStatus('已連接', 'connected');
+                updateVAD(false);
+            }
+        }
+
+        function encodePCMToBase64(int16Array) {
+            const buffer = int16Array.buffer;
+            const binary = String.fromCharCode.apply(null, new Uint8Array(buffer));
+            return btoa(binary);
+        }
+
+        // 事件監聽
+        callBtn.addEventListener('click', startCall);
+        stopBtn.addEventListener('click', stopCall);
+
+        // 初始化
+        initWebSocket();
+    </script>
+</body>
+</html>
+

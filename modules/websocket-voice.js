@@ -13,6 +13,7 @@ import { getToneTag } from "./tts-cartesia.js";
 import { synthesizeSpeechCartesiaStream } from "./tts-cartesia-stream.js";
 import { getPerformanceMonitor } from "./performance-monitor.js";
 import { IncrementalSTTProcessor } from "./incremental-stt.js";
+import { createErrorRecoveryManager } from "./error-recovery.js";
 
 /**
  * WebSocket 語音服務器類
@@ -22,6 +23,14 @@ export class VoiceWebSocketServer {
     this.app = expressApp;
     this.sessions = new Map(); // sessionId -> VoiceSession
     this.incrementalSTTProcessors = new Map(); // sessionId -> IncrementalSTTProcessor
+    this.errorRecoveryManagers = new Map(); // sessionId -> ErrorRecoveryManager
+    
+    // 创建全局错误恢复管理器
+    this.globalErrorRecovery = createErrorRecoveryManager({
+      maxRetries: 3,
+      retryDelay: 1000,
+      exponentialBackoff: true,
+    });
     
     // 延遲設置，避免在構造函數中拋出錯誤
     try {
@@ -343,24 +352,56 @@ export class VoiceWebSocketServer {
     });
 
     try {
-      // 合併音頻片段
+      // 合併音頻片段（尝试使用 ffmpeg，否则使用简单合并）
       console.log(`🔊 合併 ${audioChunks.length} 個音頻片段 (${session.id})`);
-      const mergedAudioBuffer = await mergeAudioChunks(audioChunks);
+      const mergeStartTime = Date.now();
+      
+      let mergedAudioBuffer;
+      try {
+        const { mergeAudioWithFFmpeg } = await import('./audio-ffmpeg.js');
+        mergedAudioBuffer = await mergeAudioWithFFmpeg(audioChunks, {
+          outputFormat: audioChunks[0]?.format || 'webm',
+          sampleRate: 16000,
+          channels: 1,
+        });
+        console.log(`✅ 使用 ffmpeg 合併音頻成功`);
+      } catch (ffmpegError) {
+        console.warn(`⚠️ ffmpeg 合併失敗，使用簡單合併:`, ffmpegError.message);
+        mergedAudioBuffer = await mergeAudioChunks(audioChunks);
+      }
+      
+      const mergeDuration = Date.now() - mergeStartTime;
+      const performanceMonitor = getPerformanceMonitor();
+      performanceMonitor.recordAudioProcessing(mergedAudioBuffer.length, mergeDuration, true);
       
       // 將 Buffer 轉換為 Base64
       const audioBase64 = mergedAudioBuffer.toString("base64");
 
-      // 進行語音識別（添加 30 秒超時）
+      // 進行語音識別（添加 30 秒超時，使用錯誤恢復）
       console.log(`🎤 開始語音識別 (${session.id})...`);
       const sttStartTime = Date.now();
-      const transcribedText = await Promise.race([
-        transcribeFromBase64(audioBase64, {
-          language: session.language,
-        }),
-        this.createTimeoutPromise(30000, "語音識別超時（30秒），請重試"),
-      ]);
+      
+      // 获取或创建会话的错误恢复管理器
+      let recoveryManager = this.errorRecoveryManagers.get(session.id);
+      if (!recoveryManager) {
+        recoveryManager = createErrorRecoveryManager({
+          maxRetries: 2,
+          retryDelay: 500,
+        });
+        this.errorRecoveryManagers.set(session.id, recoveryManager);
+      }
+      
+      const transcribedText = await recoveryManager.executeWithRetry(
+        () => Promise.race([
+          transcribeFromBase64(audioBase64, {
+            language: session.language,
+          }),
+          this.createTimeoutPromise(30000, "語音識別超時（30秒），請重試"),
+        ]),
+        { operation: 'STT', sessionId: session.id }
+      );
+      
       const sttDuration = Date.now() - sttStartTime;
-      const performanceMonitor = getPerformanceMonitor();
       performanceMonitor.recordSTT(sttDuration, !!transcribedText);
 
       // 檢查是否被打斷（在 STT 處理期間）
