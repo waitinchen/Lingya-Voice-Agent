@@ -852,6 +852,18 @@ export class VoiceWebSocketServer {
     const clearHistory = msg.data?.clearHistory !== false;
     console.log(`🔄 處理重置請求 (${session.id}): clearHistory=${clearHistory}`);
 
+    // 清理增量 STT 处理器
+    if (this.incrementalSTTProcessors.has(session.id)) {
+      const processor = this.incrementalSTTProcessors.get(session.id);
+      processor.reset();
+    }
+
+    // 清理错误恢复管理器
+    if (this.errorRecoveryManagers.has(session.id)) {
+      const recoveryManager = this.errorRecoveryManagers.get(session.id);
+      recoveryManager.reset();
+    }
+
     session.reset(clearHistory);
 
     this.sendMessage(session, {
