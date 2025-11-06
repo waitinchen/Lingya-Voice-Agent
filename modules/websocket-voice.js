@@ -615,13 +615,20 @@ export class VoiceWebSocketServer {
               return;
             }
 
+            // 確保 fullText 不是 undefined
+            const fullText = chunk.fullText || '';
+            if (!fullText || fullText === 'undefined') {
+              console.warn('⚠️ llm_stream_chunk 跳過無效的 fullText:', chunk);
+              return;
+            }
+
             // 發送增量文字片段
             this.sendMessage(session, {
               type: "llm_stream_chunk",
               data: {
-                text: chunk.fullText,
-                delta: chunk.delta,
-                fullText: chunk.fullText,
+                text: fullText,
+                delta: chunk.delta || '',
+                fullText: fullText,
                 tags: chunk.tags || [],
               },
             });

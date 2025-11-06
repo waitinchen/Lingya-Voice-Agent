@@ -732,11 +732,12 @@
                     if (!currentStreamingMessage) {
                         currentStreamingMessage = addThinkingMessage();
                     }
-                    // 設置超時：如果 30 秒內沒有收到 llm_stream_end，自動清除並顯示錯誤
+                    // 設置超時：如果 60 秒內沒有收到 llm_stream_end，自動清除並顯示錯誤
+                    // 增加超時時間，因為 LLM 處理可能需要更長時間
                     if (llmStreamTimeout) clearTimeout(llmStreamTimeout);
                     llmStreamTimeout = setTimeout(() => {
                         if (currentStreamingMessage && currentStreamingMessage.hasAttribute('data-thinking')) {
-                            console.warn('⚠️ LLM 流式處理超時（30秒），清除思考動畫');
+                            console.warn('⚠️ LLM 流式處理超時（60秒），清除思考動畫');
                             removeThinkingMessage();
                             currentStreamingMessage = null;
                             addMessage('assistant', '抱歉，響應超時，請稍後再試 😅');
@@ -744,12 +745,13 @@
                             setInputEnabled(true);
                             hideInterruptButton();
                         }
-                    }, 30000); // 30 秒超時
+                    }, 60000); // 60 秒超時（增加超時時間）
                     break;
                     
                 case 'llm_stream_chunk':
                     // LLM 增量文字（流式顯示）
-                    if (msg.data?.fullText) {
+                    // 確保 fullText 不是 undefined 或空
+                    if (msg.data?.fullText && msg.data.fullText !== 'undefined' && msg.data.fullText.trim() !== '') {
                         if (!currentStreamingMessage) {
                             currentStreamingMessage = document.createElement('div');
                             currentStreamingMessage.className = 'message assistant';
@@ -765,6 +767,8 @@
                             contentEl.textContent = msg.data.fullText;
                             messagesEl.scrollTop = messagesEl.scrollHeight;
                         }
+                    } else {
+                        console.warn('⚠️ llm_stream_chunk 收到無效的 fullText:', msg.data?.fullText);
                     }
                     break;
                     
@@ -1139,6 +1143,12 @@
                     
                     // 恢復所有消息
                     messageHistory.forEach(msg => {
+                        // 跳過無效消息（text 為 undefined 或空）
+                        if (!msg.text || msg.text === 'undefined' || msg.text.trim() === '') {
+                            console.warn('⚠️ 跳過無效消息:', msg);
+                            return;
+                        }
+                        
                         const messageEl = document.createElement('div');
                         messageEl.className = `message ${msg.role}`;
                         
@@ -1664,6 +1674,18 @@
 
         // 添加訊息到聊天
         function addMessage(role, text, isVoice = false, audioBase64 = null, toneTag = null) {
+            // 驗證 text 參數，防止保存 undefined 消息
+            if (!text || text === 'undefined' || (typeof text === 'string' && text.trim() === '')) {
+                console.warn('⚠️ addMessage 收到無效的 text 參數:', text);
+                // 如果是助手消息且 text 無效，使用默認錯誤消息
+                if (role === 'assistant') {
+                    text = '抱歉，我遇到了一些問題 😅';
+                } else {
+                    // 用戶消息無效，不添加消息
+                    return null;
+                }
+            }
+            
             const messageEl = document.createElement('div');
             messageEl.className = `message ${role}`;
             
@@ -1722,10 +1744,10 @@
             messagesEl.appendChild(messageEl);
             messagesEl.scrollTop = messagesEl.scrollHeight;
             
-            // 保存到消息歷史（用於恢復對話記錄）
+            // 保存到消息歷史（用於恢復對話記錄）- 確保 text 有效
             messageHistory.push({
                 role: role,
-                text: text,
+                text: text, // 現在 text 已經被驗證和清理
                 audioBase64: audioBase64 || null,
                 toneTag: toneTag || null,
                 timestamp: Date.now()
