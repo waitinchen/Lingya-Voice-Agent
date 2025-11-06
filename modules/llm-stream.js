@@ -218,6 +218,12 @@ export async function chatWithLLMStream(prompt, conversationHistory = [], option
     if (LLM_PROVIDER === "claude" && anthropicClient) {
       // ========== Claude API 流式處理 ==========
       
+      // 在请求开始前检查是否已被中止
+      if (abortSignal && abortSignal.aborted) {
+        console.log("⏹️  LLM 流式處理在開始前已被中止");
+        throw new Error("LLM stream aborted");
+      }
+      
       const systemMessages = messages
         .filter(m => m.role === "system")
         .map(m => m.content);
@@ -369,9 +375,18 @@ export async function chatWithLLMStream(prompt, conversationHistory = [], option
     
   } catch (error) {
     // 如果是中止錯誤，不記錄為錯誤
-    if (error.name === "AbortError" || error.message === "LLM stream aborted") {
+    const isAbortError = 
+      error.name === "AbortError" || 
+      error.message === "LLM stream aborted" ||
+      error.message === "Request was aborted" ||
+      (error.message && error.message.includes("aborted"));
+    
+    if (isAbortError) {
       console.log(`⏹️  LLM 流式處理被中止`);
-      throw error;
+      // 创建一个特殊的错误对象，标记为中止错误
+      const abortError = new Error("LLM stream aborted");
+      abortError.name = "AbortError";
+      throw abortError;
     }
     console.error(`❌ LLM 流式處理失敗:`, error);
     throw error;

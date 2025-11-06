@@ -674,7 +674,13 @@ export class VoiceWebSocketServer {
 
     } catch (error) {
       // 如果是中止錯誤，不發送錯誤消息
-      if (error.name === "AbortError" || error.message === "LLM stream aborted") {
+      const isAbortError = 
+        error.name === "AbortError" || 
+        error.message === "LLM stream aborted" ||
+        error.message === "Request was aborted" ||
+        (error.message && error.message.includes("aborted"));
+      
+      if (isAbortError) {
         console.log(`⏹️  LLM 流式處理被中止 (${session.id})`);
         session.setState(SessionState.IDLE);
         return;
