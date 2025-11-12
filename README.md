@@ -222,9 +222,19 @@ npm run test:quick # 快速測試
 
 ## 📚 文檔
 
+### 🚀 部署相關
+- [語音系統部署完整指南](./VOICE_DEPLOYMENT_GUIDE.md) - 語音功能專用部署文檔
+- [語音部署檢查清單](./docs/VOICE_DEPLOYMENT_CHECKLIST.md) - 部署前後檢查項目
+- [語音功能測試指南](./docs/VOICE_TESTING_GUIDE.md) - 完整測試方法
+- [Railway 部署指南](./RAILWAY_SETUP.md) - Railway 平台部署步驟
+- [部署檢查清單](./docs/DEPLOYMENT_CHECKLIST.md) - 通用部署檢查
+
+### 🎵 語音系統
 - [語氣標籤轉譯層](./docs/VOICE_PARAMS_TRANSLATION.md)
 - [三個升級功能](./docs/VOICE_UPGRADE_GUIDE.md)
 - [語氣呼吸曲線](./docs/TONE_BREATH_CURVE.md)
+
+### 🧠 核心機制
 - [自由之律](./docs/LAW_OF_DRIFT.md)
 - [Claude API 設定](./docs/CLAUDE_API_SETUP.md)
 
